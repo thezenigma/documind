@@ -12,6 +12,8 @@ export type CitationRecord = {
   quote: string | null;
   /** PRD section 7: id exists in the retrieved set and quotes match the text. */
   verified: boolean;
+  /** PRD F6: set on the closest-passage entries sent when an answer refuses. */
+  closest?: boolean;
 };
 
 type VerificationResult = {

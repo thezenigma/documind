@@ -27,6 +27,7 @@ export function AskWorkspace({
       page: c.pageStart,
       chunkId: c.chunkId,
       quote: c.quote,
+      closest: c.closest === true,
     });
     setTab("viewer");
   }

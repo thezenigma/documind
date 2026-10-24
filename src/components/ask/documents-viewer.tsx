@@ -8,6 +8,8 @@ export type ViewerTarget = {
   page: number;
   chunkId: string;
   quote: string | null;
+  /** PRD F6: set when the passage is a refusal's closest match, not a citation. */
+  closest?: boolean;
 };
 
 type PageData = {
@@ -273,7 +275,9 @@ export function DocumentsViewer({
           </p>
           {data.passage && (
             <div className="mt-5 border-t border-border pt-3">
-              <p className="text-sm font-semibold">Cited passage</p>
+              <p className="text-sm font-semibold">
+                {target.closest ? "Closest passage" : "Cited passage"}
+              </p>
               <p className="mt-1 max-w-[68ch] whitespace-pre-wrap text-sm text-muted">
                 {displayText(data.passage)}
               </p>

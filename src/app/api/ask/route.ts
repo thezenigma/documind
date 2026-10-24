@@ -200,7 +200,9 @@ export async function POST(request: Request): Promise<Response> {
     pageStart: p.pageStart,
     pageEnd: p.pageEnd,
     quote: null,
-    verified: true,
+    // Nothing is verified before verification runs; the done frame replaces
+    // this list with the cited set and its real labels.
+    verified: false,
   }));
 
   const encoder = new TextEncoder();
@@ -231,6 +233,25 @@ export async function POST(request: Request): Promise<Response> {
 
         const { citations, unverifiedCount } = verifyCitations(answer, passages);
 
+        // PRD F6: when the answer refuses, the closest passages found travel
+        // with the done frame so the reader can check the nearest matches.
+        // They are also stored on the message so a restored history keeps the
+        // refusal context (each record carries closest: true).
+        const closest: CitationRecord[] =
+          citations.length === 0
+            ? passages.slice(0, 4).map((p) => ({
+                n: 0,
+                chunkId: p.chunkId,
+                documentId: p.documentId,
+                fileName: p.fileName,
+                pageStart: p.pageStart,
+                pageEnd: p.pageEnd,
+                quote: null,
+                verified: false,
+                closest: true,
+              }))
+            : [];
+
         let messageId: string | null = null;
         if (conversationId) {
           const { data: row, error: answerError } = await db()
@@ -239,7 +260,7 @@ export async function POST(request: Request): Promise<Response> {
               conversation_id: conversationId,
               role: "assistant",
               content: answer,
-              citations,
+              citations: citations.length > 0 ? citations : closest,
             })
             .select("id")
             .single();
@@ -265,7 +286,7 @@ export async function POST(request: Request): Promise<Response> {
           if (flagError) console.error("[ask] flag insert failed:", flagError.message);
         }
 
-        send({ type: "done", citations, messageId, conversationId });
+        send({ type: "done", citations, closest, messageId, conversationId });
       } catch (err) {
         if (upstream.signal.aborted) {
           // The reader cancelled; close without an error frame.

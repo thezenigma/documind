@@ -17,6 +17,8 @@ export type WireCitation = {
   pageEnd: number;
   quote: string | null;
   verified: boolean;
+  /** PRD F6: true on closest-passage entries sent with a refusal. */
+  closest?: boolean;
 };
 
 type TurnState = "streaming" | "done" | "stopped" | "error" | "limit";
@@ -26,6 +28,7 @@ type Turn = {
   question: string;
   answer: string;
   citations: WireCitation[] | null;
+  closest: WireCitation[] | null;
   state: TurnState;
   error?: string;
 };
@@ -157,6 +160,46 @@ function References({
   );
 }
 
+/** PRD F6: after a refusal, the nearest matches from the search are listed so
+    the reader can check what the documents actually contain. */
+function ClosestPassages({
+  passages,
+  onCitation,
+}: {
+  passages: WireCitation[];
+  onCitation?: (c: WireCitation) => void;
+}) {
+  if (passages.length === 0) return null;
+  return (
+    <div className="mt-3 border-t border-border pt-3">
+      <p className="text-sm font-semibold">Closest passages found</p>
+      <p className="mt-1 text-sm text-muted">
+        These were the nearest matches. Open one to check the text.
+      </p>
+      <ul className="mt-2 flex flex-col gap-1">
+        {passages.map((c, i) => (
+          <li key={c.chunkId || i} className="text-sm">
+            {c.documentId && onCitation ? (
+              <button
+                type="button"
+                className="text-left hover:underline"
+                aria-label={`Open the closest passage from ${c.fileName}, ${pageLabel(c)}`}
+                onClick={() => onCitation(c)}
+              >
+                {c.fileName}, {pageLabel(c)}
+              </button>
+            ) : (
+              <span>
+                {c.fileName}, {pageLabel(c)}
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export function AskPanel({
   documents,
   onCitation,
@@ -237,7 +280,7 @@ export function AskPanel({
     const generation = generationRef.current;
     setTurns((prev) => [
       ...prev,
-      { id, question: q, answer: "", citations: null, state: "streaming" },
+      { id, question: q, answer: "", citations: null, closest: null, state: "streaming" },
     ]);
     setStatus("");
 
@@ -287,7 +330,12 @@ export function AskPanel({
           let payload:
             | { type: "citations"; citations: WireCitation[] }
             | { type: "token"; t: string }
-            | { type: "done"; citations: WireCitation[]; conversationId: string | null }
+            | {
+                type: "done";
+                citations: WireCitation[];
+                closest: WireCitation[];
+                conversationId: string | null;
+              }
             | { type: "error"; message: string };
           try {
             payload = JSON.parse(line.slice(6));
@@ -306,7 +354,11 @@ export function AskPanel({
             if (generation === generationRef.current) {
               conversationIdRef.current = payload.conversationId;
             }
-            patchTurn(id, { citations: payload.citations, state: "done" });
+            patchTurn(id, {
+              citations: payload.citations,
+              closest: payload.closest,
+              state: "done",
+            });
           } else if (payload.type === "error") {
             failed = true;
             patchTurn(id, { state: "error", error: payload.message });
@@ -463,6 +515,10 @@ export function AskPanel({
                     <p className="form-message mt-3" role="alert">
                       {turn.error}
                     </p>
+                  )}
+
+                  {turn.state === "done" && turn.closest && turn.closest.length > 0 && (
+                    <ClosestPassages passages={turn.closest} onCitation={onCitation} />
                   )}
 
                   {turn.citations && (
