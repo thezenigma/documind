@@ -40,3 +40,19 @@ Render.com is not part of the initial architecture. It comes back only as a back
 ## Design skill routing
 
 The PRD section 11 assigns Taste the direction step, but the repository DESIGN.md says an existing DESIGN.md means the direction is already decided. DESIGN.md wins on conflict, so Taste does not run a direction step. The design-decisions.md file records the decisions inherited from PRD section 11 instead.
+
+## Auth: Next.js built-in pattern instead of Auth.js
+
+Confirmed with the owner on 2026-10-24. The PRD section 8 specified Auth.js with database sessions, but two facts contradicted that: the Auth.js credentials provider does not persist sessions in the database (it uses JWT cookies), and the Auth.js project is now frozen (absorbed into Better Auth, still published under a beta tag). The owner chose the Next.js official pattern instead:
+
+- Sessions are rows in Postgres (public.sessions, 30-day expiry). The cookie holds a jose-signed session id, so deleting rows ends sessions immediately (logout, password reset, account deletion).
+- Server actions for signup, login, logout, resend verification, password reset. Optimistic cookie check in src/proxy.ts (Next 16 renamed middleware to proxy), authoritative session check in src/lib/dal.ts.
+- Passwords hashed with bcryptjs. One-time tokens stored as SHA-256 hashes in public.auth_tokens (verify_email 24h, reset_password 1h).
+- Email verification before upload is enforced once uploads exist; the DAL already exposes emailVerified.
+- Email is pluggable: EMAIL_API_KEY (Resend-compatible) sends real mail; without it the server logs the link (preview mode). A real provider key is still needed before launch.
+
+## Schema notes
+
+- Migration core_schema creates all PRD section 8 tables plus sessions, auth_tokens and rate_limits, with a public.check_rate_limit function (fixed window, atomic in the database so limits hold across server instances).
+- Embeddings are stored as halfvec(2048) with an HNSW index: pgvector caps vector indexes at 2000 dimensions, halfvec supports 4000, and fp16 precision does not change top-k retrieval.
+- Row level security is currently off and all Supabase access happens server-side only (the anon key is never shipped to the browser; uploads will use server-signed storage URLs). The owner was asked whether to enable RLS with no policies as defense in depth, which requires the service role key to be set first.
