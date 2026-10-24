@@ -29,11 +29,12 @@ export async function extractPlainText(buffer: Buffer): Promise<ExtractedDocumen
   return { pages: [{ page: 1, text: buffer.toString("utf8").trim() }], totalPages: null };
 }
 
-/* Chunking: ~450 token passages, paragraph aware, page numbers preserved. */
+/* Chunking: 500-800 token passages with 80 tokens of overlap (PRD section 7),
+   paragraph aware, page numbers preserved. */
 
-const TARGET_CHARS = 1800; // roughly 450 tokens
-const MAX_CHARS = 2600;
-const OVERLAP_CHARS = 120;
+const TARGET_CHARS = 2400; // roughly 600 tokens
+const MAX_CHARS = 3200; // roughly 800 tokens
+const OVERLAP_CHARS = 320; // roughly 80 tokens
 
 export type ChunkDraft = {
   pageStart: number;
@@ -75,39 +76,57 @@ export function chunkPages(pages: PageText[]): ChunkDraft[] {
   const chunks: ChunkDraft[] = [];
   let current: PageText[] = [];
   let currentLen = 0;
+  // Tail of the last flushed chunk, carried into the next one as overlap.
+  let carry: PageText | null = null;
 
-  const flush = () => {
-    if (current.length === 0) return;
+  /** Flushes the accumulated paragraphs and returns the overlap tail. */
+  const flush = (): PageText | null => {
+    if (current.length === 0) return null;
     const text = current.map((c) => c.text).join("\n\n").trim();
-    if (text) {
-      chunks.push({
-        pageStart: current[0].page,
-        pageEnd: current[current.length - 1].page,
-        sectionTitle: findSectionTitle(current[0].text),
-        text,
-        tokenCount: Math.ceil(text.length / 4),
-      });
-    }
+    const tail = current[current.length - 1].page;
+    const first = current[0].page;
+    const title = findSectionTitle(current[0].text);
     current = [];
     currentLen = 0;
+    if (!text) return null;
+    chunks.push({
+      pageStart: first,
+      pageEnd: tail,
+      sectionTitle: title,
+      text,
+      tokenCount: Math.ceil(text.length / 4),
+    });
+    if (text.length <= OVERLAP_CHARS) return null;
+    const overlap = text.slice(text.length - OVERLAP_CHARS);
+    const cut = overlap.indexOf(" ");
+    return { page: tail, text: cut >= 0 ? overlap.slice(cut + 1) : overlap };
   };
 
   for (const { page, text } of pages) {
     for (const para of splitParagraphs(text)) {
       if (para.length > MAX_CHARS) {
-        flush();
-        for (const piece of splitLongParagraph(para)) {
+        carry = flush();
+        const pieces = splitLongParagraph(para);
+        pieces.forEach((piece, k) => {
+          const withCarry = k === 0 ? carry : null;
+          const joined = withCarry ? `${withCarry.text}\n\n${piece}` : piece;
           chunks.push({
-            pageStart: page,
+            pageStart: withCarry ? withCarry.page : page,
             pageEnd: page,
-            sectionTitle: findSectionTitle(piece),
-            text: piece,
-            tokenCount: Math.ceil(piece.length / 4),
+            sectionTitle: findSectionTitle(joined),
+            text: joined,
+            tokenCount: Math.ceil(joined.length / 4),
           });
-        }
+        });
+        carry = null;
         continue;
       }
-      if (currentLen + para.length > TARGET_CHARS && current.length > 0) flush();
+      if (currentLen + para.length > TARGET_CHARS && current.length > 0) carry = flush();
+      if (carry && current.length === 0) {
+        current.push(carry);
+        currentLen = carry.text.length + 2;
+        carry = null;
+      }
       current.push({ page, text: para });
       currentLen += para.length + 2;
     }

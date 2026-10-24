@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireUser } from "@/lib/dal";
 import { db } from "@/lib/db";
 import { logout } from "@/lib/auth-actions";
@@ -31,11 +32,16 @@ export default async function LibraryPage() {
           <h1 className="text-2xl">Your library</h1>
           <p className="mt-1 text-base text-muted">{user.email}</p>
         </div>
-        <form action={logout}>
-          <button type="submit" className="btn btn-secondary">
-            Sign out
-          </button>
-        </form>
+        <div className="flex items-center gap-3">
+          <Link href="/ask" className="link text-sm">
+            Ask
+          </Link>
+          <form action={logout}>
+            <button type="submit" className="btn btn-secondary">
+              Sign out
+            </button>
+          </form>
+        </div>
       </div>
 
       <div className="mt-8">
