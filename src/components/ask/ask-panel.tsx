@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 
 export type AskDocument = {
   id: string;
@@ -304,6 +304,43 @@ export function AskPanel({
   const generationRef = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
   const nextIdRef = useRef(1);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const pickerRef = useRef<HTMLDivElement | null>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const atBottomRef = useRef(true);
+
+  // Follow the stream only while the reader is already at the bottom, so
+  // scrolling up to check a citation is never yanked back down.
+  useEffect(() => {
+    if (turns.length + restoredMessages.length === 0) return;
+    const el = scrollRef.current;
+    if (el && atBottomRef.current) el.scrollTop = el.scrollHeight;
+  }, [turns, restoredMessages]);
+
+  function handleThreadScroll() {
+    const el = scrollRef.current;
+    if (!el) return;
+    atBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 64;
+  }
+
+  // The document picker closes on Escape or a click outside it.
+  useEffect(() => {
+    if (!pickerOpen) return;
+    function onPointer(event: PointerEvent) {
+      if (pickerRef.current && !pickerRef.current.contains(event.target as Node)) {
+        setPickerOpen(false);
+      }
+    }
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setPickerOpen(false);
+    }
+    document.addEventListener("pointerdown", onPointer);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointer);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [pickerOpen]);
 
   // The parent remounts this panel with a key when the restored conversation
   // changes, so every state above simply initializes from initialConversation.
@@ -509,137 +546,84 @@ export function AskPanel({
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <section className="rounded-[6px] border border-border bg-surface p-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-sm font-semibold">
-            Documents ({selected.size} of {documents.length} selected)
-          </p>
-          {documents.length > 1 && (
-            <button type="button" className="link text-sm" onClick={toggleAll}>
-              {selected.size === documents.length ? "Clear all" : "Select all"}
-            </button>
+    <div className="flex h-full min-h-0 flex-1 flex-col">
+      {/* Thread: the scrollable conversation, newest at the bottom. */}
+      <div
+        ref={scrollRef}
+        onScroll={handleThreadScroll}
+        className="min-h-0 flex-1 overflow-y-auto"
+      >
+        <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-6 sm:px-6">
+          {restoredTitle && (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-[6px] border border-border bg-surface px-4 py-3">
+              <p className="text-sm text-muted">Continuing {restoredTitle}.</p>
+              <button
+                type="button"
+                className="link text-sm"
+                onClick={() => continueFrom(null)}
+              >
+                Start fresh
+              </button>
+            </div>
           )}
-        </div>
-        {restoredTitle && (
-          <div className="mt-3 flex items-center justify-between gap-2">
-            <p className="text-sm text-muted">
-              Continuing {restoredTitle}.
+
+          {turns.length === 0 && restoredMessages.length === 0 && !status && (
+            <p className="py-8 text-center text-base text-muted">
+              Ask a question about the selected documents. Every answer points
+              to the page it came from.
             </p>
-            <button
-              type="button"
-              className="link text-sm"
-              onClick={() => continueFrom(null)}
-            >
-              Start fresh
-            </button>
-          </div>
-        )}
-        <div className="mt-2 flex flex-col gap-1">
-          {documents.map((doc) => (
-            <label key={doc.id} className="flex cursor-pointer items-center gap-2 py-1 text-base">
-              <input
-                type="checkbox"
-                checked={selected.has(doc.id)}
-                onChange={() => toggleDocument(doc.id)}
-                className="h-4 w-4 accent-[var(--accent)]"
-              />
-              <span>
-                {doc.file_name}
-                {doc.pages ? ` (${doc.pages} ${doc.pages === 1 ? "page" : "pages"})` : ""}
-              </span>
-            </label>
-          ))}
-        </div>
-      </section>
-
-      <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-        {error && (
-          <p className="form-message form-message-error" role="alert">
-            {error}
-          </p>
-        )}
-        <label htmlFor="ask-question" className="text-sm font-semibold">
-          Your question
-        </label>
-        <textarea
-          id="ask-question"
-          className="input min-h-[80px] resize-y"
-          rows={3}
-          placeholder="What does the probation policy say?"
-          value={question}
-          onChange={(e) => setQuestion(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              void ask();
-            }
-          }}
-        />
-        <p className="text-sm text-muted">
-          Press Enter to ask. Hold Shift and press Enter for a new line.
-        </p>
-        <div className="flex items-center gap-3">
-          {streaming ? (
-            <button type="button" className="btn btn-secondary" onClick={stop}>
-              Stop
-            </button>
-          ) : (
-            <button
-              type="submit"
-              className="btn btn-primary"
-              disabled={status === "Preparing…"}
-            >
-              {status === "Preparing…" ? "Preparing…" : "Ask"}
-            </button>
           )}
-        </div>
-      </form>
 
-      {(turns.length > 0 || restoredMessages.length > 0) && (
-        <section className="flex flex-col gap-6">
-          {restoredMessages.map((turn) => (
-            <Fragment key={`restored-${turn.id}`}>
-              <article className="rounded-[6px] border border-border bg-surface p-5">
+          <section className="flex flex-col gap-6">
+            {restoredMessages.map((turn) => (
+              <Fragment key={`restored-${turn.id}`}>
                 {turn.question && (
-                  <p className="text-base font-semibold">{turn.question}</p>
+                  <div className="flex justify-end">
+                    <p className="max-w-[85%] rounded-[6px] border border-border bg-surface px-4 py-2 text-base font-semibold">
+                      {turn.question}
+                    </p>
+                  </div>
                 )}
                 {turn.answer && (
-                  <AnswerText
-                    text={turn.answer}
-                    citations={turn.citations}
-                    numbers={displayNumbers(turn.answer, turn.citations)}
-                    onCitation={onCitation}
-                  />
+                  <div className="flex flex-col gap-2">
+                    <AnswerText
+                      text={turn.answer}
+                      citations={turn.citations}
+                      numbers={displayNumbers(turn.answer, turn.citations)}
+                      onCitation={onCitation}
+                    />
+                    {turn.closest && turn.closest.length > 0 && (
+                      <ClosestPassages passages={turn.closest} onCitation={onCitation} />
+                    )}
+                    {turn.citations && !turn.closest && turn.citations.length > 0 && (
+                      <References
+                        citations={turn.citations}
+                        numbers={displayNumbers(turn.answer, turn.citations)}
+                        onCitation={onCitation}
+                      />
+                    )}
+                  </div>
                 )}
-                {turn.closest && turn.closest.length > 0 && (
-                  <ClosestPassages passages={turn.closest} onCitation={onCitation} />
-                )}
-                {turn.citations && !turn.closest && turn.citations.length > 0 && (
-                  <References
-                    citations={turn.citations}
-                    numbers={displayNumbers(turn.answer, turn.citations)}
-                    onCitation={onCitation}
-                  />
-                )}
-              </article>
-            </Fragment>
-          ))}
-          {turns.map((turn, index) => {
-            const numbers = displayNumbers(turn.answer, turn.citations);
-            return (
-              <Fragment key={turn.id}>
-                {sectionStarts.includes(index) && (
-                  <p className="text-sm text-muted">
-                    New conversation. Answers below use only the documents
-                    selected now.
-                  </p>
-                )}
-                <article className="rounded-[6px] border border-border bg-surface p-5">
-                  <p className="text-base font-semibold">{turn.question}</p>
+              </Fragment>
+            ))}
+            {turns.map((turn, index) => {
+              const numbers = displayNumbers(turn.answer, turn.citations);
+              return (
+                <div key={turn.id} className="flex flex-col gap-3">
+                  {sectionStarts.includes(index) && (
+                    <p className="text-sm text-muted">
+                      New conversation. Answers below use only the documents
+                      selected now.
+                    </p>
+                  )}
+                  <div className="flex justify-end">
+                    <p className="max-w-[85%] rounded-[6px] border border-border bg-surface px-4 py-2 text-base font-semibold">
+                      {turn.question}
+                    </p>
+                  </div>
 
                   {turn.state === "streaming" && turn.answer === "" && (
-                    <p className="mt-2 text-muted" role="status">
+                    <p className="text-muted" role="status">
                       Writing an answer…
                     </p>
                   )}
@@ -654,17 +638,17 @@ export function AskPanel({
                   )}
 
                   {turn.state === "stopped" && (
-                    <p className="mt-2 text-sm text-muted">Stopped.</p>
+                    <p className="text-sm text-muted">Stopped.</p>
                   )}
 
                   {turn.state === "error" && turn.error && (
-                    <p className="form-message form-message-error mt-3" role="alert">
+                    <p className="form-message form-message-error" role="alert">
                       {turn.error}
                     </p>
                   )}
 
                   {turn.state === "limit" && turn.error && (
-                    <p className="form-message mt-3" role="alert">
+                    <p className="form-message" role="alert">
                       {turn.error}
                     </p>
                   )}
@@ -676,12 +660,105 @@ export function AskPanel({
                   {turn.citations && (
                     <References citations={turn.citations} numbers={numbers} onCitation={onCitation} />
                   )}
-                </article>
-              </Fragment>
-            );
-          })}
-        </section>
-      )}
+                </div>
+              );
+            })}
+          </section>
+        </div>
+      </div>
+
+      {/* Composer: pinned to the bottom of the shell. */}
+      <div className="border-t border-border bg-background">
+        <div className="mx-auto w-full max-w-3xl px-4 py-4 sm:px-6">
+          {error && (
+            <p className="form-message form-message-error mb-3" role="alert">
+              {error}
+            </p>
+          )}
+
+          {/* Document selection, collapsed into a chip that opens upward. */}
+          <div className="relative" ref={pickerRef}>
+            <button
+              type="button"
+              className="btn btn-secondary text-sm"
+              aria-expanded={pickerOpen}
+              aria-controls="doc-picker"
+              onClick={() => setPickerOpen((v) => !v)}
+            >
+              Documents · {selected.size} of {documents.length} selected
+            </button>
+            {pickerOpen && (
+              <div
+                id="doc-picker"
+                className="absolute bottom-full left-0 z-20 mb-2 w-full rounded-[6px] border border-border bg-surface p-4 shadow-xl"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-semibold">Choose documents</p>
+                  {documents.length > 1 && (
+                    <button type="button" className="link text-sm" onClick={toggleAll}>
+                      {selected.size === documents.length ? "Clear all" : "Select all"}
+                    </button>
+                  )}
+                </div>
+                <div className="mt-2 flex flex-col gap-1">
+                  {documents.map((doc) => (
+                    <label key={doc.id} className="flex cursor-pointer items-center gap-2 py-1 text-base">
+                      <input
+                        type="checkbox"
+                        checked={selected.has(doc.id)}
+                        onChange={() => toggleDocument(doc.id)}
+                        className="h-4 w-4 accent-[var(--accent)]"
+                      />
+                      <span>
+                        {doc.file_name}
+                        {doc.pages ? ` (${doc.pages} ${doc.pages === 1 ? "page" : "pages"})` : ""}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <form onSubmit={handleSubmit} className="mt-3 flex items-end gap-3">
+            <div className="min-w-0 flex-1">
+              <label htmlFor="ask-question" className="sr-only">
+                Your question
+              </label>
+              <textarea
+                id="ask-question"
+                className="input min-h-[64px] resize-y"
+                rows={2}
+                placeholder="What does the probation policy say?"
+                value={question}
+                onChange={(e) => setQuestion(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    void ask();
+                  }
+                }}
+              />
+            </div>
+            {streaming ? (
+              <button type="button" className="btn btn-secondary" onClick={stop}>
+                Stop
+              </button>
+            ) : (
+              <button
+                type="submit"
+                className="btn btn-primary"
+                disabled={status === "Preparing…"}
+              >
+                {status === "Preparing…" ? "Preparing…" : "Ask"}
+              </button>
+            )}
+          </form>
+          <p className="mt-2 hidden text-sm text-muted sm:block">
+            Press Enter to ask. Hold Shift and press Enter for a new line.
+          </p>
+        </div>
+      </div>
     </div>
   );
 }

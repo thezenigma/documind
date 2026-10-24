@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { Fraunces, Source_Sans_3, JetBrains_Mono } from "next/font/google";
-import Link from "next/link";
 import "./globals.css";
 
 const fraunces = Fraunces({
@@ -37,13 +36,6 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${fraunces.variable} ${sourceSans.variable} ${jetbrains.variable} h-full`}
     >
       <body className="flex min-h-full flex-col">
-        <header className="border-b border-border">
-          <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-4">
-            <Link href="/" className="wordmark">
-              DocuMind
-            </Link>
-          </div>
-        </header>
         <div className="flex flex-1 flex-col">{children}</div>
       </body>
     </html>

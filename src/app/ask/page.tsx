@@ -1,9 +1,8 @@
-import Link from "next/link";
 import { requireUser } from "@/lib/dal";
 import { db } from "@/lib/db";
-import { logout } from "@/lib/auth-actions";
-import { AskWorkspace } from "@/components/ask/ask-workspace";
+import { AskShell } from "@/components/ask/ask-shell";
 import type { AskDocument } from "@/components/ask/ask-panel";
+import type { DocumentSummary } from "@/components/library/documents-list";
 
 export const metadata = { title: "Ask" };
 
@@ -27,51 +26,36 @@ export default async function AskPage({
     .order("created_at", { ascending: true });
   const documents = (data ?? []) as AskDocument[];
 
+  // Full summaries for the Library popup, including documents still indexing.
+  const { data: allDocs } = await db()
+    .from("documents")
+    .select("id, file_name, size_bytes, pages, status, error, created_at")
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: false });
+  const libraryDocuments = (allDocs ?? []) as DocumentSummary[];
+
+  const supabaseUrl = process.env.SUPABASE_URL ?? "";
+  const anonKey = process.env.SUPABASE_ANON_KEY ?? "";
+
   return (
-    <main id="main" className="mx-auto w-full max-w-6xl px-6 py-12">
+    <>
       <a
-        href="#main"
-        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-10 focus:rounded-[6px] focus:border focus:border-border focus:bg-surface focus:px-4 focus:py-2"
+        href="#ask-thread"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-[6px] focus:border focus:border-border focus:bg-surface focus:px-4 focus:py-2"
       >
         Skip to content
       </a>
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-3xl">Ask your documents</h1>
-          <p className="mt-1 text-base text-muted">
-            Choose documents, ask a question, and check every answer against the
-            page it came from.
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <Link href="/library" className="link text-sm">
-            Library
-          </Link>
-          <form action={logout}>
-            <button type="submit" className="btn btn-secondary">
-              Sign out
-            </button>
-          </form>
-        </div>
-      </div>
-
-      {documents.length === 0 ? (
-        <section className="mt-8 rounded-[6px] border border-border bg-surface p-8">
-          <h2 className="text-xl">Nothing indexed yet</h2>
-          <p className="mt-2 text-base text-muted">
-            Upload a document in your library and wait for it to finish
-            indexing. Once it is ready, come back here to ask a question
-            about it.
-          </p>
-          <p className="mt-4">
-            <Link href="/library" className="link">
-              Go to your library
-            </Link>
-          </p>
-        </section>
-      ) : (
-        <AskWorkspace documents={documents} initialDocumentId={initialDocumentId} />
-      )}
-    </main>
+      <main id="main" className="flex h-dvh flex-col overflow-hidden">
+        <h1 className="sr-only">Ask your documents</h1>
+        <AskShell
+          documents={documents}
+          libraryDocuments={libraryDocuments}
+          supabaseUrl={supabaseUrl}
+          anonKey={anonKey}
+          email={user.email}
+          initialDocumentId={initialDocumentId}
+        />
+      </main>
+    </>
   );
 }

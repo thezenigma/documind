@@ -20,9 +20,13 @@ type Phase = "idle" | "uploading" | "indexing" | "done";
 export function UploadPanel({
   supabaseUrl,
   anonKey,
+  onNavigate,
 }: {
   supabaseUrl: string;
   anonKey: string;
+  /** Called when the done-link is followed, so an embedding surface (the Ask
+      Library popup) can close itself as the route updates. */
+  onNavigate?: () => void;
 }) {
   const router = useRouter();
   const [state, formAction, pending] = useActionState(requestUpload, undefined);
@@ -239,7 +243,11 @@ export function UploadPanel({
           <p className="form-message form-message-ok">{stage}</p>
           <div className="flex flex-wrap items-center gap-3">
             {doneDocumentId && (
-              <Link href={`/ask?document=${doneDocumentId}`} className="btn btn-primary">
+              <Link
+                href={`/ask?document=${doneDocumentId}`}
+                className="btn btn-primary"
+                onClick={onNavigate}
+              >
                 Ask a question about it
               </Link>
             )}
