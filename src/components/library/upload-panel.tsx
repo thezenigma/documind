@@ -5,11 +5,11 @@ import { useRouter } from "next/navigation";
 import { cancelUpload, requestUpload } from "@/lib/document-actions";
 
 const STAGE_COPY: Record<string, string> = {
-  queued: "Waiting...",
-  uploading: "Uploading...",
-  reading: "Reading the file...",
-  splitting: "Splitting into passages...",
-  indexing: "Indexing passages...",
+  queued: "Waiting…",
+  uploading: "Uploading…",
+  reading: "Reading the file…",
+  splitting: "Splitting into passages…",
+  indexing: "Indexing passages…",
   ready: "Indexed and ready.",
   failed: "Indexing failed.",
 };
@@ -198,7 +198,7 @@ export function UploadPanel({
           />
           <div>
             <button type="submit" className="btn btn-primary" disabled={pending}>
-              {pending ? "Preparing..." : "Upload and index"}
+              {pending ? "Preparing…" : "Upload and index"}
             </button>
           </div>
         </form>
@@ -207,7 +207,7 @@ export function UploadPanel({
       {phase === "uploading" && (
         <div className="mt-4 flex flex-col gap-3">
           <p className="text-sm" role="status">
-            Uploading... {progress}%
+            Uploading… {progress}%
           </p>
           <div className="h-1 w-full rounded-[6px] bg-border">
             <div className="h-1 rounded-[6px] bg-accent" style={{ width: `${progress}%` }} />

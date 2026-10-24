@@ -16,6 +16,20 @@ async function setStatus(documentId: string, status: string): Promise<void> {
   if (error) console.error("[ingest] status update failed:", error.message);
 }
 
+/** Stores the extracted text of every page so the viewer can jump to a page
+    without reprocessing the file. Replaces any previous rows (re-ingest). */
+async function savePageText(documentId: string, pages: Array<{ page: number; text: string }>): Promise<void> {
+  await db().from("document_pages").delete().eq("document_id", documentId);
+  const rows = pages.map((p) => ({ document_id: documentId, page_number: p.page, text: p.text }));
+  for (let i = 0; i < rows.length; i += INSERT_BATCH) {
+    const { error } = await db().from("document_pages").insert(rows.slice(i, i + INSERT_BATCH));
+    if (error) {
+      console.error("[ingest] page insert failed:", error.message);
+      throw new Error("Could not save the page text. Try uploading again.");
+    }
+  }
+}
+
 function looksLikePdf(buffer: Buffer): boolean {
   return buffer.subarray(0, 5).toString("latin1") === "%PDF-";
 }
@@ -48,6 +62,7 @@ export async function POST(
 
   try {
     // Reading
+    const startedAt = Date.now();
     await setStatus(id, "reading");
     const buffer = await downloadObject(doc.storage_key);
     if (buffer.length === 0) throw new Error("The uploaded file is empty.");
@@ -71,6 +86,7 @@ export async function POST(
         "No readable text was found in this file. Scanned or image-only PDFs need OCR before they can be indexed.",
       );
     }
+    await savePageText(id, extracted.pages);
 
     // Splitting
     await setStatus(id, "splitting");
@@ -114,6 +130,9 @@ export async function POST(
       throw new Error("Could not finish indexing. Try uploading again.");
     }
 
+    console.log(
+      `[ingest] done doc=${id} pages=${extracted.pages.length} chunks=${chunks.length} ms=${Date.now() - startedAt}`,
+    );
     return Response.json({ ok: true, chunks: chunks.length });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Ingestion failed for an unknown reason.";

@@ -8,7 +8,7 @@ export type AskDocument = {
   pages: number | null;
 };
 
-type WireCitation = {
+export type WireCitation = {
   n: number;
   chunkId: string;
   documentId: string;
@@ -37,24 +37,55 @@ function pageLabel(c: WireCitation): string {
     : `pages ${c.pageStart} to ${c.pageEnd}`;
 }
 
-function AnswerText({ text }: { text: string }) {
+function AnswerText({
+  text,
+  citations,
+  onCitation,
+}: {
+  text: string;
+  citations: WireCitation[] | null;
+  onCitation?: (c: WireCitation) => void;
+}) {
+  const byN = new Map((citations ?? []).map((c) => [c.n, c]));
   const parts = text.split(/(\[\d{1,2}\])/g);
   return (
-    <p className="mt-2 whitespace-pre-wrap text-base leading-relaxed">
-      {parts.map((part, i) =>
-        /^\[\d{1,2}\]$/.test(part) ? (
-          <span key={i} className="font-mono text-sm text-accent">
-            {part}
-          </span>
-        ) : (
-          <span key={i}>{part}</span>
-        ),
-      )}
+    <p className="mt-2 break-words whitespace-pre-wrap text-base leading-relaxed">
+      {parts.map((part, i) => {
+        const match = /^\[(\d{1,2})\]$/.exec(part);
+        const citation = match ? byN.get(Number(match[1])) : undefined;
+        if (citation && citation.documentId && onCitation) {
+          return (
+            <button
+              key={i}
+              type="button"
+              className="citation-ref font-mono hover:underline"
+              aria-label={`Show the passage for citation ${citation.n} from ${citation.fileName}`}
+              onClick={() => onCitation(citation)}
+            >
+              {part}
+            </button>
+          );
+        }
+        if (match) {
+          return (
+            <span key={i} className="font-mono text-sm text-accent">
+              {part}
+            </span>
+          );
+        }
+        return <span key={i}>{part}</span>;
+      })}
     </p>
   );
 }
 
-function References({ citations }: { citations: WireCitation[] }) {
+function References({
+  citations,
+  onCitation,
+}: {
+  citations: WireCitation[];
+  onCitation?: (c: WireCitation) => void;
+}) {
   if (citations.length === 0) return null;
   return (
     <div className="mt-3 border-t border-border pt-3">
@@ -62,12 +93,28 @@ function References({ citations }: { citations: WireCitation[] }) {
       <ul className="mt-1 flex flex-col gap-1">
         {citations.map((c, i) => (
           <li key={`${c.n}-${i}`} className="flex flex-wrap items-baseline gap-x-2 text-sm">
-            <span className="font-mono text-accent">
-              {c.n > 0 ? `[${c.n}]` : "[?]"}
-            </span>
-            <span>
-              {c.fileName}, {pageLabel(c)}
-            </span>
+            {c.documentId && onCitation ? (
+              <button
+                type="button"
+                className="text-left hover:underline"
+                aria-label={`Show the passage for citation ${c.n} from ${c.fileName}, ${pageLabel(c)}`}
+                onClick={() => onCitation(c)}
+              >
+                <span className="citation-ref font-mono">
+                  {c.n > 0 ? `[${c.n}]` : "[?]"}
+                </span>
+                {c.fileName}, {pageLabel(c)}
+              </button>
+            ) : (
+              <>
+                <span className="citation-ref font-mono">
+                  {c.n > 0 ? `[${c.n}]` : "[?]"}
+                </span>
+                <span>
+                  {c.fileName}, {pageLabel(c)}
+                </span>
+              </>
+            )}
             <span className={c.verified ? "text-accent" : "text-error"}>
               {c.verified ? "checked" : "unverified"}
             </span>
@@ -83,7 +130,13 @@ function References({ citations }: { citations: WireCitation[] }) {
   );
 }
 
-export function AskPanel({ documents }: { documents: AskDocument[] }) {
+export function AskPanel({
+  documents,
+  onCitation,
+}: {
+  documents: AskDocument[];
+  onCitation?: (c: WireCitation) => void;
+}) {
   const [selected, setSelected] = useState<Set<string>>(
     () => new Set(documents.map((d) => d.id)),
   );
@@ -121,7 +174,7 @@ export function AskPanel({ documents }: { documents: AskDocument[] }) {
 
   async function ask() {
     const q = question.trim();
-    if (streaming || status === "Preparing...") return;
+    if (streaming || status === "Preparing…") return;
     if (q.length < 4) {
       setError("Ask a question of at least 4 characters.");
       return;
@@ -132,7 +185,7 @@ export function AskPanel({ documents }: { documents: AskDocument[] }) {
     }
     setError("");
     setQuestion("");
-    setStatus("Preparing...");
+    setStatus("Preparing…");
 
     const id = nextIdRef.current++;
     setTurns((prev) => [
@@ -304,9 +357,9 @@ export function AskPanel({ documents }: { documents: AskDocument[] }) {
             <button
               type="submit"
               className="btn btn-primary"
-              disabled={status === "Preparing..."}
+              disabled={status === "Preparing…"}
             >
-              {status === "Preparing..." ? "Preparing..." : "Ask"}
+              {status === "Preparing…" ? "Preparing…" : "Ask"}
             </button>
           )}
         </div>
@@ -323,11 +376,13 @@ export function AskPanel({ documents }: { documents: AskDocument[] }) {
 
               {turn.state === "streaming" && turn.answer === "" && (
                 <p className="mt-2 text-muted" role="status">
-                  Writing an answer...
+                  Writing an answer…
                 </p>
               )}
 
-              {turn.answer && <AnswerText text={turn.answer} />}
+              {turn.answer && (
+                <AnswerText text={turn.answer} citations={turn.citations} onCitation={onCitation} />
+              )}
 
               {turn.state === "stopped" && (
                 <p className="mt-2 text-sm text-muted">Stopped.</p>
@@ -345,7 +400,7 @@ export function AskPanel({ documents }: { documents: AskDocument[] }) {
                 </p>
               )}
 
-              {turn.citations && <References citations={turn.citations} />}
+              {turn.citations && <References citations={turn.citations} onCitation={onCitation} />}
             </article>
           ))}
         </section>

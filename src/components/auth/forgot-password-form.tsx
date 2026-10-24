@@ -33,7 +33,7 @@ export function ForgotPasswordForm() {
         )}
       </div>
       <button type="submit" className="btn btn-primary" disabled={pending}>
-        {pending ? "Sending..." : "Send reset link"}
+        {pending ? "Sending…" : "Send reset link"}
       </button>
     </form>
   );

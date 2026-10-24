@@ -11,7 +11,7 @@ export default function ResetPasswordPage(props: PageProps<"/reset-password">) {
     <main className="flex flex-1 items-center justify-center px-6 py-16">
       <div className="w-full max-w-sm">
         <Suspense
-          fallback={<p className="text-base text-muted">Loading the reset form...</p>}
+          fallback={<p className="text-base text-muted">Loading the reset form…</p>}
         >
           <ResetPasswordContent searchParams={props.searchParams} />
         </Suspense>

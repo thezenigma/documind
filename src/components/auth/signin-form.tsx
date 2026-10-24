@@ -53,7 +53,7 @@ export function SigninForm() {
         )}
       </div>
       <button type="submit" className="btn btn-primary" disabled={pending}>
-        {pending ? "Signing in..." : "Sign in"}
+        {pending ? "Signing in…" : "Sign in"}
       </button>
       <p className="text-sm text-muted">
         <Link href="/forgot-password" className="link">

@@ -36,7 +36,7 @@ export function ResetPasswordForm({ token }: { token: string }) {
         )}
       </div>
       <button type="submit" className="btn btn-primary" disabled={pending}>
-        {pending ? "Updating..." : "Update password"}
+        {pending ? "Updating…" : "Update password"}
       </button>
       <p className="text-sm text-muted">
         Changing your password signs out every device.

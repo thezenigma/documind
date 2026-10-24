@@ -80,6 +80,13 @@ h4 {
   outline-offset: 2px;
 }
 
+/* No double-tap zoom delay on controls. */
+button,
+[role="tab"],
+a {
+  touch-action: manipulation;
+}
+
 .wordmark {
   font-family: var(--font-heading);
   font-size: 1.375rem;
@@ -177,6 +184,7 @@ h4 {
   color: var(--accent);
   font-size: 0.875rem;
   padding-left: 0.5rem;
+  margin-right: 0.5rem;
   white-space: nowrap;
 }
 

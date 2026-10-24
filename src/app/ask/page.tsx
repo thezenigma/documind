@@ -2,7 +2,8 @@ import Link from "next/link";
 import { requireUser } from "@/lib/dal";
 import { db } from "@/lib/db";
 import { logout } from "@/lib/auth-actions";
-import { AskPanel, type AskDocument } from "@/components/ask/ask-panel";
+import { AskWorkspace } from "@/components/ask/ask-workspace";
+import type { AskDocument } from "@/components/ask/ask-panel";
 
 export const metadata = { title: "Ask" };
 
@@ -21,7 +22,13 @@ export default async function AskPage() {
   const documents = (data ?? []) as AskDocument[];
 
   return (
-    <main className="mx-auto w-full max-w-3xl px-6 py-12">
+    <main id="main" className="mx-auto w-full max-w-7xl px-6 py-12">
+      <a
+        href="#main"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-10 focus:rounded-[6px] focus:border focus:border-border focus:bg-surface focus:px-4 focus:py-2"
+      >
+        Skip to content
+      </a>
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl">Ask your documents</h1>
@@ -57,9 +64,7 @@ export default async function AskPage() {
           </p>
         </section>
       ) : (
-        <div className="mt-8">
-          <AskPanel documents={documents} />
-        </div>
+        <AskWorkspace documents={documents} />
       )}
     </main>
   );

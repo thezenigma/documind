@@ -28,7 +28,7 @@ export function ResendForm() {
           aria-invalid={state?.fieldErrors?.email ? true : undefined}
         />
         <button type="submit" className="btn btn-secondary" disabled={pending}>
-          {pending ? "Sending..." : "Resend"}
+          {pending ? "Sending…" : "Resend"}
         </button>
       </div>
       {state?.fieldErrors?.email && (

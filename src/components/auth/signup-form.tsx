@@ -55,7 +55,7 @@ export function SignupForm() {
         )}
       </div>
       <button type="submit" className="btn btn-primary" disabled={pending}>
-        {pending ? "Creating account..." : "Sign up"}
+        {pending ? "Creating account…" : "Sign up"}
       </button>
       <p className="text-sm text-muted">
         Already have an account?{" "}
