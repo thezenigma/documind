@@ -1,24 +1,31 @@
-import { Suspense } from "react";
 import { requireUser } from "@/lib/dal";
+import { db } from "@/lib/db";
 import { logout } from "@/lib/auth-actions";
+import { UploadPanel } from "@/components/library/upload-panel";
+import { DocumentsList, type DocumentSummary } from "@/components/library/documents-list";
 
 export const metadata = { title: "Your library" };
 
-export default function LibraryPage() {
-  return (
-    <main className="mx-auto w-full max-w-3xl px-6 py-12">
-      <Suspense fallback={<p className="text-base text-muted">Loading your library...</p>}>
-        <Library />
-      </Suspense>
-    </main>
-  );
-}
+// Session-gated page: render per request instead of prerendering a shell.
+// Prerendering speculatively renders the route without cookies, which poisons
+// the session lookup (see docs/decisions.md).
+export const instant = false;
 
-async function Library() {
+export default async function LibraryPage() {
   const user = await requireUser();
 
+  const { data } = await db()
+    .from("documents")
+    .select("id, file_name, size_bytes, pages, status, error, created_at")
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: false });
+  const documents = (data ?? []) as DocumentSummary[];
+
+  const supabaseUrl = process.env.SUPABASE_URL ?? "";
+  const anonKey = process.env.SUPABASE_ANON_KEY ?? "";
+
   return (
-    <>
+    <main className="mx-auto w-full max-w-3xl px-6 py-12">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl">Your library</h1>
@@ -31,14 +38,11 @@ async function Library() {
         </form>
       </div>
 
-      <section className="mt-10 rounded-[6px] border border-border bg-surface p-8">
-        <h2 className="text-xl">No documents yet</h2>
-        <p className="mt-2 text-base text-muted">
-          Upload a PDF, Word document, text file, or Markdown file up to 25 MB
-          and 300 pages. Once it is indexed, ask a question in plain language
-          and every answer will point to the page it came from.
-        </p>
-      </section>
-    </>
+      <div className="mt-8">
+        <UploadPanel supabaseUrl={supabaseUrl} anonKey={anonKey} />
+      </div>
+
+      <DocumentsList documents={documents} />
+    </main>
   );
 }

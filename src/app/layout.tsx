@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
-import { Newsreader, Source_Sans_3, JetBrains_Mono } from "next/font/google";
+import { Fraunces, Source_Sans_3, JetBrains_Mono } from "next/font/google";
 import Link from "next/link";
 import "./globals.css";
 
-const newsreader = Newsreader({
+const fraunces = Fraunces({
   subsets: ["latin"],
-  variable: "--font-newsreader",
+  variable: "--font-fraunces",
   display: "swap",
 });
 
@@ -34,7 +34,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
-      className={`${newsreader.variable} ${sourceSans.variable} ${jetbrains.variable} h-full`}
+      className={`${fraunces.variable} ${sourceSans.variable} ${jetbrains.variable} h-full`}
     >
       <body className="flex min-h-full flex-col">
         <header className="border-b border-border">

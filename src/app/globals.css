@@ -14,7 +14,7 @@
   --color-warning: var(--warning);
 
   --font-sans: var(--font-source-sans), "Segoe UI", sans-serif;
-  --font-heading: var(--font-newsreader), Georgia, serif;
+  --font-heading: var(--font-fraunces), Georgia, serif;
   --font-mono: var(--font-jetbrains), "Courier New", monospace;
 
   --text-sm: 0.875rem;

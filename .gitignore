@@ -40,3 +40,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Generated test files (regenerate with node scripts/make-test-files.js)
+scripts/test-files/

@@ -4,7 +4,7 @@ Recorded 2026-10-24 during the design intake step. Source of truth: prd.md secti
 
 ## Typography
 
-- Headings: Newsreader. Interface text: Source Sans 3. Citations, code and technical values: JetBrains Mono. Loaded with next/font so they self-host at build time.
+- Headings: Fraunces. Owner override on 2026-10-24: the PRD named Newsreader, but it reads too close to Claude's brand serif, so the owner asked for a change. Fraunces is a warm old-style serif that keeps the manuscript feel without that resemblance. Interface text: Source Sans 3. Citations, code and technical values: JetBrains Mono. All three load with next/font so they self-host at build time.
 - Type scale in globals.css: 14 / 16 / 18 / 22 / 30 / 44. Body 16px with line height 1.55. Reading views cap at 68 characters.
 - None of the three banned fonts appear anywhere, including fallbacks (the create-next-app scaffold shipped Geist and was replaced).
 
