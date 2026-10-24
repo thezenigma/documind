@@ -64,28 +64,73 @@ function findMark(text: string, needle: string): { start: number; end: number } 
   return end > start ? { start, end } : null;
 }
 
-function firstSentence(text: string): string {
-  const limit = Math.min(text.length, 400);
-  for (let i = 40; i < limit; i++) {
-    if (text[i] === "." || text[i] === "\n") return text.slice(0, i + 1);
-  }
-  return text.slice(0, 120);
+/** Collapse extraction line breaks for display: single newlines become spaces
+    so sentences flow, blank lines stay paragraph breaks. Matching and slicing
+    both run on this same string, so highlight ranges keep pointing at the
+    characters on screen. */
+function displayText(raw: string): string {
+  return raw
+    .split(/\n\s*\n/)
+    .map((para) => para.replace(/\n/g, " "))
+    .join("\n\n");
 }
 
-/** Location candidates for the highlight, most specific first: a quoted span
-    from the answer, the full cited passage, then its opening sentence. */
-function locateHighlight(data: PageData): { start: number; end: number } | null {
-  const candidates: string[] = [];
-  if (data.passage) {
-    const q = data.passage.match(/["\u201c]([^"\n\u201c\u201d]{15,300})["\u201d]/);
-    if (q) candidates.push(q[1]);
-    candidates.push(data.passage, firstSentence(data.passage));
+function splitSentences(text: string): string[] {
+  return text.match(/[^.!?]+[.!?]+["'\u201d)]?\s*/g) ?? [];
+}
+
+type Highlight = { start: number; end: number; partial: boolean };
+
+/** Location for the highlight, most specific first: a quoted span from the
+    answer, the full cited passage when it sits entirely on this page, then
+    the stretch of the passage that appears here, for chunks that run across
+    page boundaries. partial marks that the passage continues elsewhere. */
+function locateHighlight(data: PageData, text: string): Highlight | null {
+  if (!data.passage) return null;
+  const quoted = data.passage.match(/["\u201c]([^"\n\u201c\u201d]{15,300})["\u201d]/);
+  if (quoted) {
+    const range = findMark(text, quoted[1]);
+    if (range) return { ...range, partial: false };
   }
-  for (const candidate of candidates) {
-    const range = findMark(data.text, candidate);
-    if (range) return range;
+  const whole = findMark(text, data.passage);
+  if (whole) return { ...whole, partial: false };
+  let start = -1;
+  let end = -1;
+  for (const sentence of splitSentences(data.passage)) {
+    if (sentence.trim().length < 20) continue;
+    const range = findMark(text, sentence);
+    if (!range) continue;
+    if (start < 0 || range.start < start) start = range.start;
+    if (range.end > end) end = range.end;
   }
+  if (start >= 0 && end > start) return { start, end, partial: true };
   return null;
+}
+
+/** Page text never changes for an uploaded document, so successful loads are
+    kept for the session. The cache also collapses repeat requests for the
+    same page into a single fetch. Failed loads are evicted so retry works. */
+const pageCache = new Map<string, Promise<PageData>>();
+
+function loadPage(url: string): Promise<PageData> {
+  const cached = pageCache.get(url);
+  if (cached) return cached;
+  const pending = fetch(url)
+    .then(async (res) => {
+      const json = await res.json();
+      if (!res.ok) {
+        throw new Error(
+          (json as { error?: string }).error ?? "The page could not be loaded. Try again.",
+        );
+      }
+      return json as PageData;
+    })
+    .catch((err: unknown) => {
+      pageCache.delete(url);
+      throw err;
+    });
+  pageCache.set(url, pending);
+  return pending;
 }
 
 export function DocumentsViewer({
@@ -114,21 +159,17 @@ export function DocumentsViewer({
     let cancelled = false;
     const fetchKey = key;
     const chunk = target.chunkId ? `?chunk=${target.chunkId}` : "";
-    fetch(`/api/documents/${target.documentId}/page/${viewPage}${chunk}`)
-      .then(async (res) => {
-        const json = await res.json();
-        if (cancelled) return;
-        if (res.ok) {
-          setLoaded({ key: fetchKey, data: json as PageData, error: "" });
-        } else {
-          const message =
-            (json as { error?: string }).error ?? "The page could not be loaded. Try again.";
-          setLoaded({ key: fetchKey, data: null, error: message });
-        }
+    loadPage(`/api/documents/${target.documentId}/page/${viewPage}${chunk}`)
+      .then((data) => {
+        if (!cancelled) setLoaded({ key: fetchKey, data, error: "" });
       })
-      .catch(() => {
+      .catch((err: unknown) => {
         if (cancelled) return;
-        setLoaded({ key: fetchKey, data: null, error: "The page could not be loaded. Try again." });
+        const message =
+          err instanceof Error && err.message
+            ? err.message
+            : "The page could not be loaded. Try again.";
+        setLoaded({ key: fetchKey, data: null, error: message });
       });
     return () => {
       cancelled = true;
@@ -153,7 +194,8 @@ export function DocumentsViewer({
     );
   }
 
-  const highlight = data ? locateHighlight(data) : null;
+  const text = data ? displayText(data.text) : "";
+  const highlight = data ? locateHighlight(data, text) : null;
   const canPrev = viewPage > 1;
   const canNext = data ? data.totalPages == null || viewPage < data.totalPages : false;
 
@@ -215,22 +257,31 @@ export function DocumentsViewer({
           <p className="max-w-[68ch] break-words whitespace-pre-wrap text-base leading-relaxed">
             {highlight ? (
               <>
-                {data.text.slice(0, highlight.start)}
-                <mark className="evidence" ref={markRef}>
-                  {data.text.slice(highlight.start, highlight.end)}
+                {text.slice(0, highlight.start)}
+                <mark
+                  key={`${highlight.start}-${highlight.end}`}
+                  className="evidence"
+                  ref={markRef}
+                >
+                  {text.slice(highlight.start, highlight.end)}
                 </mark>
-                {data.text.slice(highlight.end)}
+                {text.slice(highlight.end)}
               </>
             ) : (
-              data.text
+              text
             )}
           </p>
           {data.passage && (
             <div className="mt-5 border-t border-border pt-3">
               <p className="text-sm font-semibold">Cited passage</p>
               <p className="mt-1 max-w-[68ch] whitespace-pre-wrap text-sm text-muted">
-                {data.passage}
+                {displayText(data.passage)}
               </p>
+              {highlight?.partial && (
+                <p className="mt-1 text-sm text-muted">
+                  This passage runs across more than one page.
+                </p>
+              )}
             </div>
           )}
         </div>

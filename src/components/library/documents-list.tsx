@@ -38,6 +38,7 @@ function formatDate(iso: string): string {
 export function DocumentsList({ documents }: { documents: DocumentSummary[] }) {
   const router = useRouter();
   const [polledMs, setPolledMs] = useState(0);
+  const [confirmId, setConfirmId] = useState<string | null>(null);
 
   const hasTransitional = documents.some((d) => TRANSITIONAL.has(d.status));
 
@@ -92,12 +93,36 @@ export function DocumentsList({ documents }: { documents: DocumentSummary[] }) {
               >
                 {STATUS_COPY[doc.status] ?? doc.status}
               </span>
-              <form action={deleteDocument}>
-                <input type="hidden" name="documentId" value={doc.id} />
-                <button type="submit" className="btn btn-secondary text-sm">
+              {confirmId === doc.id ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm text-muted">Delete this document?</span>
+                  <form action={deleteDocument}>
+                    <input type="hidden" name="documentId" value={doc.id} />
+                    <button
+                      type="submit"
+                      className="btn btn-secondary text-sm text-error"
+                      autoFocus
+                    >
+                      Delete
+                    </button>
+                  </form>
+                  <button
+                    type="button"
+                    className="btn btn-secondary text-sm"
+                    onClick={() => setConfirmId(null)}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn-secondary text-sm"
+                  onClick={() => setConfirmId(doc.id)}
+                >
                   Delete
                 </button>
-              </form>
+              )}
             </div>
           </li>
         ))}

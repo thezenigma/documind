@@ -10,8 +10,14 @@ export const metadata = { title: "Ask" };
 // Session-gated page: render per request (see docs/decisions.md).
 export const instant = false;
 
-export default async function AskPage() {
+export default async function AskPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
   const user = await requireUser();
+  const { document: documentParam } = await searchParams;
+  const initialDocumentId = typeof documentParam === "string" ? documentParam : null;
 
   const { data } = await db()
     .from("documents")
@@ -22,7 +28,7 @@ export default async function AskPage() {
   const documents = (data ?? []) as AskDocument[];
 
   return (
-    <main id="main" className="mx-auto w-full max-w-7xl px-6 py-12">
+    <main id="main" className="mx-auto w-full max-w-6xl px-6 py-12">
       <a
         href="#main"
         className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-10 focus:rounded-[6px] focus:border focus:border-border focus:bg-surface focus:px-4 focus:py-2"
@@ -64,7 +70,7 @@ export default async function AskPage() {
           </p>
         </section>
       ) : (
-        <AskWorkspace documents={documents} />
+        <AskWorkspace documents={documents} initialDocumentId={initialDocumentId} />
       )}
     </main>
   );

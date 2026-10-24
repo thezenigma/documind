@@ -9,7 +9,13 @@ import { DocumentsViewer, type ViewerTarget } from "./documents-viewer";
  * conversation on the right (PRD section: Ask with viewer). On a phone the
  * panes become tabs, and opening a citation switches to the viewer tab.
  */
-export function AskWorkspace({ documents }: { documents: AskDocument[] }) {
+export function AskWorkspace({
+  documents,
+  initialDocumentId,
+}: {
+  documents: AskDocument[];
+  initialDocumentId?: string | null;
+}) {
   const [tab, setTab] = useState<"viewer" | "conversation">("conversation");
   const [target, setTarget] = useState<ViewerTarget | null>(null);
 
@@ -77,7 +83,7 @@ export function AskWorkspace({ documents }: { documents: AskDocument[] }) {
           aria-labelledby="tab-conversation"
           className={tab === "conversation" ? "" : "hidden lg:block"}
         >
-          <AskPanel documents={documents} onCitation={openCitation} />
+          <AskPanel documents={documents} onCitation={openCitation} initialDocumentId={initialDocumentId} />
         </section>
       </div>
     </div>

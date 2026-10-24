@@ -26,7 +26,7 @@ export default async function LibraryPage() {
   const anonKey = process.env.SUPABASE_ANON_KEY ?? "";
 
   return (
-    <main id="main" className="mx-auto w-full max-w-3xl px-6 py-12">
+    <main id="main" className="mx-auto w-full max-w-6xl px-6 py-12">
       <a
         href="#main"
         className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-10 focus:rounded-[6px] focus:border focus:border-border focus:bg-surface focus:px-4 focus:py-2"

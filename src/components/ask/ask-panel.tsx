@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { Fragment, useRef, useState } from "react";
 
 export type AskDocument = {
   id: string;
@@ -37,13 +37,36 @@ function pageLabel(c: WireCitation): string {
     : `pages ${c.pageStart} to ${c.pageEnd}`;
 }
 
+/** The model cites by retrieval rank, which can skip numbers ([1] [3] with no
+    [2]). Display numbers are assigned in citations order, then by first
+    appearance for any id only the model wrote, so the answer and the
+    reference list read [1] [2] while verification keeps the chunk ids. The
+    map is append-only as tokens stream, so numbers never reshuffle. */
+function displayNumbers(
+  text: string,
+  citations: WireCitation[] | null,
+): Map<number, number> {
+  const map = new Map<number, number>();
+  let next = 1;
+  for (const c of citations ?? []) {
+    if (c.n > 0) map.set(c.n, next++);
+  }
+  for (const match of text.matchAll(/\[(\d{1,2})\]/g)) {
+    const n = Number(match[1]);
+    if (n > 0 && !map.has(n)) map.set(n, next++);
+  }
+  return map;
+}
+
 function AnswerText({
   text,
   citations,
+  numbers,
   onCitation,
 }: {
   text: string;
   citations: WireCitation[] | null;
+  numbers: Map<number, number>;
   onCitation?: (c: WireCitation) => void;
 }) {
   const byN = new Map((citations ?? []).map((c) => [c.n, c]));
@@ -53,23 +76,25 @@ function AnswerText({
       {parts.map((part, i) => {
         const match = /^\[(\d{1,2})\]$/.exec(part);
         const citation = match ? byN.get(Number(match[1])) : undefined;
+        const raw = match ? Number(match[1]) : 0;
+        const shown = numbers.get(raw) ?? raw;
         if (citation && citation.documentId && onCitation) {
           return (
             <button
               key={i}
               type="button"
               className="citation-ref font-mono hover:underline"
-              aria-label={`Show the passage for citation ${citation.n} from ${citation.fileName}`}
+              aria-label={`Show the passage for citation ${shown} from ${citation.fileName}`}
               onClick={() => onCitation(citation)}
             >
-              {part}
+              {`[${shown}]`}
             </button>
           );
         }
         if (match) {
           return (
             <span key={i} className="font-mono text-sm text-accent">
-              {part}
+              {`[${shown}]`}
             </span>
           );
         }
@@ -81,9 +106,11 @@ function AnswerText({
 
 function References({
   citations,
+  numbers,
   onCitation,
 }: {
   citations: WireCitation[];
+  numbers: Map<number, number>;
   onCitation?: (c: WireCitation) => void;
 }) {
   if (citations.length === 0) return null;
@@ -91,40 +118,40 @@ function References({
     <div className="mt-3 border-t border-border pt-3">
       <p className="text-sm font-semibold">References</p>
       <ul className="mt-1 flex flex-col gap-1">
-        {citations.map((c, i) => (
-          <li key={`${c.n}-${i}`} className="flex flex-wrap items-baseline gap-x-2 text-sm">
-            {c.documentId && onCitation ? (
-              <button
-                type="button"
-                className="text-left hover:underline"
-                aria-label={`Show the passage for citation ${c.n} from ${c.fileName}, ${pageLabel(c)}`}
-                onClick={() => onCitation(c)}
-              >
-                <span className="citation-ref font-mono">
-                  {c.n > 0 ? `[${c.n}]` : "[?]"}
-                </span>
-                {c.fileName}, {pageLabel(c)}
-              </button>
-            ) : (
-              <>
-                <span className="citation-ref font-mono">
-                  {c.n > 0 ? `[${c.n}]` : "[?]"}
-                </span>
-                <span>
+        {citations.map((c, i) => {
+          const shown = c.n > 0 ? numbers.get(c.n) ?? c.n : null;
+          const label = shown ? `[${shown}]` : "[?]";
+          return (
+            <li key={`${c.n}-${i}`} className="flex flex-wrap items-baseline gap-x-2 text-sm">
+              {c.documentId && onCitation ? (
+                <button
+                  type="button"
+                  className="text-left hover:underline"
+                  aria-label={`Show the passage for citation ${shown ?? "?"} from ${c.fileName}, ${pageLabel(c)}`}
+                  onClick={() => onCitation(c)}
+                >
+                  <span className="citation-ref font-mono">{label}</span>
                   {c.fileName}, {pageLabel(c)}
-                </span>
-              </>
-            )}
-            <span className={c.verified ? "text-accent" : "text-error"}>
-              {c.verified ? "checked" : "unverified"}
-            </span>
-            {c.quote && !c.verified && (
-              <span className="w-full text-muted">
-                Quoted text was not found in that passage.
+                </button>
+              ) : (
+                <>
+                  <span className="citation-ref font-mono">{label}</span>
+                  <span>
+                    {c.fileName}, {pageLabel(c)}
+                  </span>
+                </>
+              )}
+              <span className={c.verified ? "text-accent" : "text-error"}>
+                {c.verified ? "checked" : "unverified"}
               </span>
-            )}
-          </li>
-        ))}
+              {c.quote && !c.verified && (
+                <span className="w-full text-muted">
+                  Quoted text was not found in that passage.
+                </span>
+              )}
+            </li>
+          );
+        })}
       </ul>
     </div>
   );
@@ -133,22 +160,42 @@ function References({
 export function AskPanel({
   documents,
   onCitation,
+  initialDocumentId,
 }: {
   documents: AskDocument[];
   onCitation?: (c: WireCitation) => void;
+  initialDocumentId?: string | null;
 }) {
   const [selected, setSelected] = useState<Set<string>>(
-    () => new Set(documents.map((d) => d.id)),
+    () =>
+      initialDocumentId && documents.some((d) => d.id === initialDocumentId)
+        ? new Set([initialDocumentId])
+        : new Set(documents.map((d) => d.id)),
   );
   const [question, setQuestion] = useState("");
   const [turns, setTurns] = useState<Turn[]>([]);
+  const [sectionStarts, setSectionStarts] = useState<number[]>([]);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const conversationIdRef = useRef<string | null>(null);
+  const generationRef = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
   const nextIdRef = useRef(1);
 
   const streaming = turns.some((t) => t.state === "streaming");
+
+  // Changing the document set starts a fresh conversation thread. The marker
+  // records where the new section begins so the turns already on screen
+  // explain the reset instead of reading as one continuous conversation.
+  function restartThread() {
+    conversationIdRef.current = null;
+    generationRef.current += 1;
+    setSectionStarts((prev) =>
+      turns.length > 0 && prev[prev.length - 1] !== turns.length
+        ? [...prev, turns.length]
+        : prev,
+    );
+  }
 
   function toggleDocument(id: string) {
     setSelected((prev) => {
@@ -157,15 +204,14 @@ export function AskPanel({
       else next.add(id);
       return next;
     });
-    // Changing the document set starts a fresh conversation thread.
-    conversationIdRef.current = null;
+    restartThread();
   }
 
   function toggleAll() {
     setSelected((prev) =>
       prev.size === documents.length ? new Set<string>() : new Set(documents.map((d) => d.id)),
     );
-    conversationIdRef.current = null;
+    restartThread();
   }
 
   function patchTurn(id: number, patch: Partial<Turn>) {
@@ -188,6 +234,7 @@ export function AskPanel({
     setStatus("Preparing…");
 
     const id = nextIdRef.current++;
+    const generation = generationRef.current;
     setTurns((prev) => [
       ...prev,
       { id, question: q, answer: "", citations: null, state: "streaming" },
@@ -254,7 +301,11 @@ export function AskPanel({
             patchTurn(id, { answer });
           } else if (payload.type === "done") {
             finished = true;
-            conversationIdRef.current = payload.conversationId;
+            // A document toggle mid-answer starts a new thread; do not let
+            // this response carry the old conversation id back in.
+            if (generation === generationRef.current) {
+              conversationIdRef.current = payload.conversationId;
+            }
             patchTurn(id, { citations: payload.citations, state: "done" });
           } else if (payload.type === "error") {
             failed = true;
@@ -348,6 +399,9 @@ export function AskPanel({
             }
           }}
         />
+        <p className="text-sm text-muted">
+          Press Enter to ask. Hold Shift and press Enter for a new line.
+        </p>
         <div className="flex items-center gap-3">
           {streaming ? (
             <button type="button" className="btn btn-secondary" onClick={stop}>
@@ -367,42 +421,57 @@ export function AskPanel({
 
       {turns.length > 0 && (
         <section className="flex flex-col gap-6">
-          {turns.map((turn) => (
-            <article
-              key={turn.id}
-              className="rounded-[6px] border border-border bg-surface p-5"
-            >
-              <p className="text-base font-semibold">{turn.question}</p>
+          {turns.map((turn, index) => {
+            const numbers = displayNumbers(turn.answer, turn.citations);
+            return (
+              <Fragment key={turn.id}>
+                {sectionStarts.includes(index) && (
+                  <p className="text-sm text-muted">
+                    New conversation. Answers below use only the documents
+                    selected now.
+                  </p>
+                )}
+                <article className="rounded-[6px] border border-border bg-surface p-5">
+                  <p className="text-base font-semibold">{turn.question}</p>
 
-              {turn.state === "streaming" && turn.answer === "" && (
-                <p className="mt-2 text-muted" role="status">
-                  Writing an answer…
-                </p>
-              )}
+                  {turn.state === "streaming" && turn.answer === "" && (
+                    <p className="mt-2 text-muted" role="status">
+                      Writing an answer…
+                    </p>
+                  )}
 
-              {turn.answer && (
-                <AnswerText text={turn.answer} citations={turn.citations} onCitation={onCitation} />
-              )}
+                  {turn.answer && (
+                    <AnswerText
+                      text={turn.answer}
+                      citations={turn.citations}
+                      numbers={numbers}
+                      onCitation={onCitation}
+                    />
+                  )}
 
-              {turn.state === "stopped" && (
-                <p className="mt-2 text-sm text-muted">Stopped.</p>
-              )}
+                  {turn.state === "stopped" && (
+                    <p className="mt-2 text-sm text-muted">Stopped.</p>
+                  )}
 
-              {turn.state === "error" && turn.error && (
-                <p className="form-message form-message-error mt-3" role="alert">
-                  {turn.error}
-                </p>
-              )}
+                  {turn.state === "error" && turn.error && (
+                    <p className="form-message form-message-error mt-3" role="alert">
+                      {turn.error}
+                    </p>
+                  )}
 
-              {turn.state === "limit" && turn.error && (
-                <p className="form-message mt-3" role="alert">
-                  {turn.error}
-                </p>
-              )}
+                  {turn.state === "limit" && turn.error && (
+                    <p className="form-message mt-3" role="alert">
+                      {turn.error}
+                    </p>
+                  )}
 
-              {turn.citations && <References citations={turn.citations} onCitation={onCitation} />}
-            </article>
-          ))}
+                  {turn.citations && (
+                    <References citations={turn.citations} numbers={numbers} onCitation={onCitation} />
+                  )}
+                </article>
+              </Fragment>
+            );
+          })}
         </section>
       )}
     </div>

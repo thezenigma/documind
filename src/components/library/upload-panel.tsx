@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { cancelUpload, requestUpload } from "@/lib/document-actions";
 
@@ -30,6 +31,7 @@ export function UploadPanel({
   const [stage, setStage] = useState("");
   const [localError, setLocalError] = useState("");
   const [dragging, setDragging] = useState(false);
+  const [doneDocumentId, setDoneDocumentId] = useState<string | null>(null);
   const fileRef = useRef<File | null>(null);
   const xhrRef = useRef<XMLHttpRequest | null>(null);
   const startedRef = useRef<string | null>(null);
@@ -38,6 +40,7 @@ export function UploadPanel({
     setPhase("idle");
     setProgress(0);
     setStage("");
+    setDoneDocumentId(null);
     startedRef.current = null;
     fileRef.current = null;
   }
@@ -62,6 +65,7 @@ export function UploadPanel({
       const json = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(json.error ?? "Indexing failed.");
       setStage("Indexed and ready.");
+      setDoneDocumentId(documentId);
       setPhase("done");
       router.refresh();
     } catch (err) {
@@ -196,6 +200,7 @@ export function UploadPanel({
             onChange={(e) => handleFile(e.target.files?.[0])}
             className="text-sm text-muted file:mr-4 file:rounded-[6px] file:border file:border-border file:bg-surface file:px-4 file:py-2 file:font-medium file:text-text"
           />
+          <p className="text-sm text-muted">Or drop the file here.</p>
           <div>
             <button type="submit" className="btn btn-primary" disabled={pending}>
               {pending ? "Preparing…" : "Upload and index"}
@@ -232,7 +237,12 @@ export function UploadPanel({
       {phase === "done" && (
         <div className="mt-4 flex flex-col gap-3" role="status">
           <p className="form-message form-message-ok">{stage}</p>
-          <div>
+          <div className="flex flex-wrap items-center gap-3">
+            {doneDocumentId && (
+              <Link href={`/ask?document=${doneDocumentId}`} className="btn btn-primary">
+                Ask a question about it
+              </Link>
+            )}
             <button type="button" className="btn btn-secondary" onClick={reset}>
               Add another document
             </button>

@@ -4,9 +4,10 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "npm run lint:design && next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "lint:design": "node scripts/lint-design.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.118.0",
