@@ -33,6 +33,63 @@ type Turn = {
   error?: string;
 };
 
+type StoredMessage = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  citations: Array<Record<string, unknown>>;
+  createdAt: string;
+};
+
+function wireFromStored(c: Array<Record<string, unknown>>): WireCitation[] {
+  return c
+    .filter(
+      (r): r is {
+        n: number;
+        chunkId: string;
+        documentId: string;
+        fileName: string;
+        pageStart: number;
+        pageEnd: number;
+        quote: string | null;
+        verified: boolean;
+        closest?: boolean;
+      } =>
+        typeof r.n === "number" &&
+        typeof r.chunkId === "string" &&
+        typeof r.documentId === "string" &&
+        typeof r.fileName === "string" &&
+        typeof r.pageStart === "number" &&
+        typeof r.pageEnd === "number" &&
+        (r.quote === null || typeof r.quote === "string") &&
+        typeof r.verified === "boolean",
+    )
+    .map((r) => ({
+      n: r.n,
+      chunkId: r.chunkId,
+      documentId: r.documentId,
+      fileName: r.fileName,
+      pageStart: r.pageStart,
+      pageEnd: r.pageEnd,
+      quote: r.quote,
+      verified: r.verified,
+      closest: r.closest === true,
+    }));
+}
+
+function restoreTurn(m: StoredMessage): Turn {
+  const citations = wireFromStored(m.citations);
+  const closest = citations.filter((c) => c.closest);
+  return {
+    id: Number(m.id),
+    question: m.role === "user" ? m.content : "",
+    answer: m.role === "assistant" ? m.content : "",
+    citations: m.role === "assistant" && citations.length > 0 ? citations : null,
+    closest: closest.length > 0 ? closest : null,
+    state: "done" as const,
+  };
+}
+
 function pageLabel(c: WireCitation): string {
   if (c.pageStart === 0) return "page not set";
   return c.pageStart === c.pageEnd
@@ -200,30 +257,56 @@ function ClosestPassages({
   );
 }
 
+export type RestoredConversation = {
+  id: string;
+  title: string;
+  documentIds: string[];
+  createdAt: string;
+  messages: StoredMessage[];
+};
+
 export function AskPanel({
   documents,
   onCitation,
   initialDocumentId,
+  initialConversation,
 }: {
   documents: AskDocument[];
   onCitation?: (c: WireCitation) => void;
   initialDocumentId?: string | null;
+  initialConversation?: RestoredConversation | null;
 }) {
   const [selected, setSelected] = useState<Set<string>>(
-    () =>
-      initialDocumentId && documents.some((d) => d.id === initialDocumentId)
-        ? new Set([initialDocumentId])
-        : new Set(documents.map((d) => d.id)),
+    () => {
+      const start = initialConversation?.documentIds[0] ?? initialDocumentId;
+      if (start && documents.some((d) => d.id === start)) {
+        return new Set(initialConversation?.documentIds.filter((id) => documents.some((d) => d.id === id)) ?? [start]);
+      }
+      return new Set(documents.map((d) => d.id));
+    },
   );
   const [question, setQuestion] = useState("");
   const [turns, setTurns] = useState<Turn[]>([]);
   const [sectionStarts, setSectionStarts] = useState<number[]>([]);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
-  const conversationIdRef = useRef<string | null>(null);
+  const [restoredTitle, setRestoredTitle] = useState<string | null>(
+    initialConversation ? initialConversation.title : null,
+  );
+  const [restoredMessages, setRestoredMessages] = useState<Turn[]>(
+    initialConversation
+      ? initialConversation.messages.map(restoreTurn)
+      : [],
+  );
+  const conversationIdRef = useRef<string | null>(
+    initialConversation ? initialConversation.id : null,
+  );
   const generationRef = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
   const nextIdRef = useRef(1);
+
+  // The parent remounts this panel with a key when the restored conversation
+  // changes, so every state above simply initializes from initialConversation.
 
   const streaming = turns.some((t) => t.state === "streaming");
 
@@ -259,6 +342,23 @@ export function AskPanel({
 
   function patchTurn(id: number, patch: Partial<Turn>) {
     setTurns((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)));
+  }
+
+  /** Continue a conversation from a restored one: keeps the same conversation id
+      while the document selection matches, otherwise starts a new thread. */
+  function continueFrom(restored: RestoredConversation | null) {
+    if (!restored) {
+      conversationIdRef.current = null;
+      generationRef.current += 1;
+      setRestoredTitle(null);
+      setRestoredMessages([]);
+      return;
+    }
+    const ids = [...selected];
+    const sameSelection = restored.documentIds.length === ids.length &&
+      restored.documentIds.every((id) => ids.includes(id));
+    conversationIdRef.current = sameSelection ? restored.id : null;
+    setRestoredTitle(restored.title);
   }
 
   async function ask() {
@@ -354,9 +454,20 @@ export function AskPanel({
             if (generation === generationRef.current) {
               conversationIdRef.current = payload.conversationId;
             }
+            // Use the verified, stored citation set rather than the initial
+            // unverified list, so restored and freshly streamed answers both
+            // render the same final references. F7.
+            const stored =
+              typeof (payload as Record<string, unknown>).storedCitations === "object" &&
+              Array.isArray((payload as Record<string, unknown>).storedCitations)
+                ? wireFromStored((payload as Record<string, unknown>).storedCitations as Record<string, unknown>[])
+                : payload.citations ?? [];
             patchTurn(id, {
-              citations: payload.citations,
-              closest: payload.closest,
+              citations:
+                stored.filter((c) => !c.closest).length > 0
+                  ? stored.filter((c) => !c.closest)
+                  : null,
+              closest: stored.filter((c) => c.closest),
               state: "done",
             });
           } else if (payload.type === "error") {
@@ -410,6 +521,20 @@ export function AskPanel({
             </button>
           )}
         </div>
+        {restoredTitle && (
+          <div className="mt-3 flex items-center justify-between gap-2">
+            <p className="text-sm text-muted">
+              Continuing {restoredTitle}.
+            </p>
+            <button
+              type="button"
+              className="link text-sm"
+              onClick={() => continueFrom(null)}
+            >
+              Start fresh
+            </button>
+          </div>
+        )}
         <div className="mt-2 flex flex-col gap-1">
           {documents.map((doc) => (
             <label key={doc.id} className="flex cursor-pointer items-center gap-2 py-1 text-base">
@@ -471,8 +596,35 @@ export function AskPanel({
         </div>
       </form>
 
-      {turns.length > 0 && (
+      {(turns.length > 0 || restoredMessages.length > 0) && (
         <section className="flex flex-col gap-6">
+          {restoredMessages.map((turn) => (
+            <Fragment key={`restored-${turn.id}`}>
+              <article className="rounded-[6px] border border-border bg-surface p-5">
+                {turn.question && (
+                  <p className="text-base font-semibold">{turn.question}</p>
+                )}
+                {turn.answer && (
+                  <AnswerText
+                    text={turn.answer}
+                    citations={turn.citations}
+                    numbers={displayNumbers(turn.answer, turn.citations)}
+                    onCitation={onCitation}
+                  />
+                )}
+                {turn.closest && turn.closest.length > 0 && (
+                  <ClosestPassages passages={turn.closest} onCitation={onCitation} />
+                )}
+                {turn.citations && !turn.closest && turn.citations.length > 0 && (
+                  <References
+                    citations={turn.citations}
+                    numbers={displayNumbers(turn.answer, turn.citations)}
+                    onCitation={onCitation}
+                  />
+                )}
+              </article>
+            </Fragment>
+          ))}
           {turns.map((turn, index) => {
             const numbers = displayNumbers(turn.answer, turn.citations);
             return (

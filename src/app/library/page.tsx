@@ -35,7 +35,7 @@ export default async function LibraryPage() {
       </a>
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl">Your library</h1>
+          <h1 className="text-3xl">Your library</h1>
           <p className="mt-1 text-base text-muted">{user.email}</p>
         </div>
         <div className="flex items-center gap-3">

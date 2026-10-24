@@ -9,7 +9,7 @@ import { verifyCitations, type CitationRecord } from "@/lib/citations";
 // PRD: first token under 3 seconds p90, answers under 1024 tokens.
 export const maxDuration = 120;
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const SYSTEM_RULES = [
   "You are DocuMind, an assistant that answers questions strictly from the provided document passages.",
@@ -286,7 +286,10 @@ export async function POST(request: Request): Promise<Response> {
           if (flagError) console.error("[ask] flag insert failed:", flagError.message);
         }
 
-        send({ type: "done", citations, closest, messageId, conversationId });
+        // Return the stored citation set exactly as written. For a refusal that
+        // stored the closest list, this is what restores the refusal context when
+        // the conversation is reopened later. F7.
+        send({ type: "done", citations, closest, messageId, conversationId, storedCitations: citations.length > 0 ? citations : closest });
       } catch (err) {
         if (upstream.signal.aborted) {
           // The reader cancelled; close without an error frame.

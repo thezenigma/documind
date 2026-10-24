@@ -53,7 +53,7 @@ export function DocumentsList({ documents }: { documents: DocumentSummary[] }) {
 
   if (documents.length === 0) {
     return (
-      <section className="mt-8 rounded-[6px] border border-border bg-surface p-8">
+      <section className="mt-8">
         <h2 className="text-xl">No documents yet</h2>
         <p className="mt-2 text-base text-muted">
           Upload a PDF, Word document, text file, or Markdown file up to 25 MB
@@ -67,15 +67,15 @@ export function DocumentsList({ documents }: { documents: DocumentSummary[] }) {
   return (
     <section className="mt-8">
       <h2 className="text-xl">Documents</h2>
-      <ul className="mt-3 flex flex-col gap-2">
-        {documents.map((doc) => (
+      <ul className="mt-3 flex flex-col gap-0">
+        {documents.map((doc, i) => (
           <li
             key={doc.id}
-            className="flex flex-wrap items-center justify-between gap-3 rounded-[6px] border border-border bg-surface px-4 py-3"
+            className={`border-b border-border py-3 ${i === documents.length - 1 ? "border-0" : ""} flex items-center justify-between gap-3`}
           >
             <div className="min-w-0 flex-1">
-              <p className="truncate text-base font-medium">{doc.file_name}</p>
-              <p className="text-sm text-muted">
+              <p className="truncate text-base font-semibold">{doc.file_name}</p>
+              <p className="font-mono text-sm text-muted">
                 {formatSize(doc.size_bytes)}
                 {doc.pages ? `, ${doc.pages} ${doc.pages === 1 ? "page" : "pages"}` : ""}
                 {" · "}
@@ -89,7 +89,7 @@ export function DocumentsList({ documents }: { documents: DocumentSummary[] }) {
             </div>
             <div className="flex items-center gap-3">
               <span
-                className={`text-sm ${doc.status === "failed" ? "text-error" : doc.status === "ready" ? "text-accent" : "text-muted"}`}
+                className={`text-sm font-medium ${doc.status === "failed" ? "text-error" : doc.status === "ready" ? "text-accent" : "text-muted"}`}
               >
                 {STATUS_COPY[doc.status] ?? doc.status}
               </span>
@@ -117,7 +117,7 @@ export function DocumentsList({ documents }: { documents: DocumentSummary[] }) {
               ) : (
                 <button
                   type="button"
-                  className="btn btn-secondary text-sm"
+                  className="text-sm font-medium text-error hover:underline"
                   onClick={() => setConfirmId(doc.id)}
                 >
                   Delete

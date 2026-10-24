@@ -43,3 +43,6 @@ next-env.d.ts
 
 # Generated test files (regenerate with node scripts/make-test-files.js)
 scripts/test-files/
+
+# OpenCode session state (harness artifact, not project code)
+reviewing-prd-and-design-docs-for-project-goals.json

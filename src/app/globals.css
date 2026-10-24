@@ -46,6 +46,7 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
+    color-scheme: dark;
     --background: #1c1b18;
     --surface: #252420;
     --text: #ece8df;
@@ -73,6 +74,7 @@ h4 {
   font-family: var(--font-heading);
   line-height: 1.15;
   font-weight: 500;
+  text-wrap: balance;
 }
 
 :focus-visible {
@@ -218,4 +220,29 @@ mark.evidence {
   mark.evidence {
     animation: none;
   }
+}
+
+/* Browser surfaces themed from the palette - the cheapest "built not assembled" signal per the craft floor. */
+::selection {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--background);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 6px;
+  border: 3px solid var(--background);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
 }
