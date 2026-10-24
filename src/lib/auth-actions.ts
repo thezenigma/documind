@@ -70,7 +70,12 @@ export async function signup(_prev: FormState, formData: FormData): Promise<Form
     return { message: "Something went wrong while creating the account. Try again." };
   }
 
-  await issueVerification(user.id, user.email);
+  try {
+    await issueVerification(user.id, user.email);
+  } catch {
+    // The account exists; only the email failed. Let the resend flow recover.
+    redirect("/check-email?mail=failed");
+  }
   redirect("/check-email");
 }
 
@@ -130,7 +135,13 @@ export async function resendVerification(_prev: FormState, formData: FormData): 
     .select("id, email_verified_at")
     .eq("email", email)
     .maybeSingle();
-  if (user && !user.email_verified_at) await issueVerification(user.id, email);
+  if (user && !user.email_verified_at) {
+    try {
+      await issueVerification(user.id, email);
+    } catch {
+      return { message: "We could not send the verification email right now. Try again in a few minutes." };
+    }
+  }
 
   return {
     ok: true,
@@ -155,32 +166,36 @@ export async function requestPasswordReset(_prev: FormState, formData: FormData)
     .maybeSingle();
 
   if (user) {
-    const { token, hash: tokenHash } = newToken();
-    await db()
-      .from("auth_tokens")
-      .delete()
-      .eq("user_id", user.id)
-      .eq("kind", "reset_password")
-      .is("used_at", null);
-    const { error } = await db().from("auth_tokens").insert({
-      user_id: user.id,
-      token_hash: tokenHash,
-      kind: "reset_password",
-      expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-    });
-    if (error) {
-      console.error("[reset] could not store token:", error.message);
-      throw new Error("Could not prepare the reset email. Try again.");
+    try {
+      const { token, hash: tokenHash } = newToken();
+      await db()
+        .from("auth_tokens")
+        .delete()
+        .eq("user_id", user.id)
+        .eq("kind", "reset_password")
+        .is("used_at", null);
+      const { error } = await db().from("auth_tokens").insert({
+        user_id: user.id,
+        token_hash: tokenHash,
+        kind: "reset_password",
+        expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      });
+      if (error) {
+        console.error("[reset] could not store token:", error.message);
+        throw new Error("token store failed");
+      }
+      await sendMail({
+        to: email,
+        subject: "Reset your DocuMind password",
+        text:
+          `Choose a new password with this link:\n\n` +
+          `${appUrl}/reset-password?token=${token}\n\n` +
+          `The link expires in 1 hour. Changing your password signs out every device. ` +
+          `If you did not request this, ignore this message.`,
+      });
+    } catch {
+      return { message: "We could not send the reset email right now. Try again in a few minutes." };
     }
-    await sendMail({
-      to: email,
-      subject: "Reset your DocuMind password",
-      text:
-        `Choose a new password with this link:\n\n` +
-        `${appUrl}/reset-password?token=${token}\n\n` +
-        `The link expires in 1 hour. Changing your password signs out every device. ` +
-        `If you did not request this, ignore this message.`,
-    });
   }
 
   return {

@@ -51,8 +51,14 @@ Confirmed with the owner on 2026-10-24. The PRD section 8 specified Auth.js with
 - Email verification before upload is enforced once uploads exist; the DAL already exposes emailVerified.
 - Email is pluggable: EMAIL_API_KEY (Resend-compatible) sends real mail; without it the server logs the link (preview mode). A real provider key is still needed before launch.
 
+## Email provider: Resend
+
+- Key added on 2026-10-24 and verified with a live send to the owner's inbox.
+- Caveat: while the Resend account has no verified sending domain, Resend accepts sends only to the account owner's own address and rejects anything else with a validation error. Production signups from other people need a verified domain (Resend dashboard, Domains) or a different from address.
+- Auth actions treat provider rejection as a normal failure: sign-up still creates the account and the check-email page explains that the email could not be sent and offers a resend, instead of crashing the request.
+
 ## Schema notes
 
 - Migration core_schema creates all PRD section 8 tables plus sessions, auth_tokens and rate_limits, with a public.check_rate_limit function (fixed window, atomic in the database so limits hold across server instances).
 - Embeddings are stored as halfvec(2048) with an HNSW index: pgvector caps vector indexes at 2000 dimensions, halfvec supports 4000, and fp16 precision does not change top-k retrieval.
-- Row level security is currently off and all Supabase access happens server-side only (the anon key is never shipped to the browser; uploads will use server-signed storage URLs). The owner was asked whether to enable RLS with no policies as defense in depth, which requires the service role key to be set first.
+- Row level security is enabled on all eleven tables with no policies. Owner decision 2026-10-24. Enforcement was verified through the public Data API with a probe table: the anon key can no longer see existing rows (reads return empty), and insert, update and delete all fail or match zero rows. The service role key bypasses RLS and is the only key the app accepts; src/lib/db.ts fails fast when it is missing, because an anon fallback would now read empty results silently.
