@@ -1,4 +1,5 @@
 import type { Usage } from "@/lib/usage";
+import { UpgradeButton } from "@/components/billing/upgrade-button";
 
 function MeterRow({
   label,
@@ -60,6 +61,7 @@ export function UsageMeter({ usage }: { usage: Usage }) {
           exhausted={usage.questionsLeft === 0}
         />
       </div>
+      <UpgradeButton isPro={usage.plan === "pro"} />
     </section>
   );
 }

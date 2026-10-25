@@ -14,8 +14,13 @@ export const metadata = { title: "Your library" };
 // the session lookup (see docs/decisions.md).
 export const instant = false;
 
-export default async function LibraryPage() {
+export default async function LibraryPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
   const user = await requireUser();
+  const { checkout } = await searchParams;
   const usage = await getUsage(user.plan, user.id);
 
   const { data } = await db()
@@ -59,6 +64,18 @@ export default async function LibraryPage() {
           <UsageMeter usage={usage} />
         </aside>
       </div>
+
+      {checkout === "done" && (
+        <p className="form-message" role="status">
+          Checkout finished. If the plan still shows the free one, reload this
+          page in a moment; the upgrade lands when Stripe confirms it.
+        </p>
+      )}
+      {checkout === "cancelled" && (
+        <p className="form-message" role="status">
+          Checkout was cancelled. Nothing was charged.
+        </p>
+      )}
 
       <DocumentsList documents={documents} />
     </main>
