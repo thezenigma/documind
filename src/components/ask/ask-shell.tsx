@@ -76,6 +76,9 @@ export function AskShell({
   const [conversations, setConversations] = useState<ConversationListItem[]>([]);
   const [loadingConversations, setLoadingConversations] = useState(false);
   const [activeConversation, setActiveConversation] = useState<RestoredConversation | null>(null);
+  // Inline delete confirm: the drawer row swaps its Delete button for the
+  // question and the two answers, so no native confirm dialog interrupts.
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   // Bumping the nonce remounts the panel so "New chat" style resets really clear.
   const [freshNonce, setFreshNonce] = useState(0);
   const loadRef = useRef(0);
@@ -90,7 +93,9 @@ export function AskShell({
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
       if (event.key !== "Escape") return;
-      if (libraryOpen) {
+      if (confirmDeleteId) {
+        setConfirmDeleteId(null);
+      } else if (libraryOpen) {
         setLibraryOpen(false);
         libraryTriggerRef.current?.focus();
       } else if (drawerOpen) {
@@ -103,7 +108,7 @@ export function AskShell({
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [libraryOpen, drawerOpen, dockOpen]);
+  }, [confirmDeleteId, libraryOpen, drawerOpen, dockOpen]);
 
   // Move focus into each layer as it opens.
   useEffect(() => {
@@ -118,6 +123,7 @@ export function AskShell({
 
   function openDrawer() {
     drawerTriggerRef.current = document.activeElement as HTMLElement | null;
+    setConfirmDeleteId(null);
     setDrawerOpen(true);
     void loadConversations();
   }
@@ -306,22 +312,37 @@ export function AskShell({
                         >
                           Open
                         </button>
-                        <button
-                          type="button"
-                          className="text-sm font-medium text-error hover:underline"
-                          aria-label={`Delete conversation ${c.title || "Untitled"}`}
-                          onClick={() => {
-                            if (
-                              window.confirm(
-                                "Delete this conversation? Its messages will be removed.",
-                              )
-                            ) {
-                              deleteConversation(c.id);
-                            }
-                          }}
-                        >
-                          Delete
-                        </button>
+                        {confirmDeleteId === c.id ? (
+                          <span className="flex flex-wrap items-center gap-2">
+                            <span className="text-sm text-muted">Delete this?</span>
+                            <button
+                              type="button"
+                              className="btn btn-secondary text-sm text-error"
+                              onClick={() => {
+                                setConfirmDeleteId(null);
+                                deleteConversation(c.id);
+                              }}
+                            >
+                              Delete
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-secondary text-sm"
+                              onClick={() => setConfirmDeleteId(null)}
+                            >
+                              Cancel
+                            </button>
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            className="text-sm font-medium text-error hover:underline"
+                            aria-label={`Delete conversation ${c.title || "Untitled"}`}
+                            onClick={() => setConfirmDeleteId(c.id)}
+                          >
+                            Delete
+                          </button>
+                        )}
                       </div>
                     </div>
                     <p className="mt-1 font-mono text-sm text-muted">
