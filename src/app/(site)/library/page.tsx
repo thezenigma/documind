@@ -2,8 +2,10 @@ import Link from "next/link";
 import { requireUser } from "@/lib/dal";
 import { db } from "@/lib/db";
 import { logout } from "@/lib/auth-actions";
+import { getUsage } from "@/lib/usage";
 import { UploadPanel } from "@/components/library/upload-panel";
 import { DocumentsList, type DocumentSummary } from "@/components/library/documents-list";
+import { UsageMeter } from "@/components/usage-meter";
 
 export const metadata = { title: "Your library" };
 
@@ -14,6 +16,7 @@ export const instant = false;
 
 export default async function LibraryPage() {
   const user = await requireUser();
+  const usage = await getUsage(user.plan, user.id);
 
   const { data } = await db()
     .from("documents")
@@ -50,8 +53,11 @@ export default async function LibraryPage() {
         </div>
       </div>
 
-      <div className="mt-8">
+      <div className="mt-8 grid gap-6 lg:grid-cols-[1fr_16rem]">
         <UploadPanel supabaseUrl={supabaseUrl} anonKey={anonKey} />
+        <aside>
+          <UsageMeter usage={usage} />
+        </aside>
       </div>
 
       <DocumentsList documents={documents} />

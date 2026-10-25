@@ -1,5 +1,6 @@
 import { requireUser } from "@/lib/dal";
 import { db } from "@/lib/db";
+import { getUsage } from "@/lib/usage";
 import { AskShell } from "@/components/ask/ask-shell";
 import type { AskDocument } from "@/components/ask/ask-panel";
 import type { DocumentSummary } from "@/components/library/documents-list";
@@ -36,6 +37,7 @@ export default async function AskPage({
 
   const supabaseUrl = process.env.SUPABASE_URL ?? "";
   const anonKey = process.env.SUPABASE_ANON_KEY ?? "";
+  const usage = await getUsage(user.plan, user.id);
 
   return (
     <>
@@ -53,6 +55,7 @@ export default async function AskPage({
           supabaseUrl={supabaseUrl}
           anonKey={anonKey}
           email={user.email}
+          usageLine={`${usage.questionsLeft} of ${usage.dailyQuestionLimit} questions left today`}
           initialDocumentId={initialDocumentId}
         />
       </main>

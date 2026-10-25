@@ -58,6 +58,7 @@ export function AskShell({
   supabaseUrl,
   anonKey,
   email,
+  usageLine,
   initialDocumentId,
 }: {
   documents: AskDocument[];
@@ -65,6 +66,7 @@ export function AskShell({
   supabaseUrl: string;
   anonKey: string;
   email: string;
+  usageLine?: string;
   initialDocumentId?: string | null;
 }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -216,6 +218,11 @@ export function AskShell({
           </Link>
         </div>
         <div className="flex items-center gap-3">
+          {usageLine && (
+            <span className="hidden font-mono text-sm text-muted lg:inline">
+              {usageLine}
+            </span>
+          )}
           <span className="hidden font-mono text-sm text-muted sm:inline">{email}</span>
           <form action={logout}>
             <button type="submit" className="btn btn-secondary text-sm">

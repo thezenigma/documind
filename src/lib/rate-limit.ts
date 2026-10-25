@@ -31,3 +31,30 @@ export async function rateLimit(
   }
   return data === true;
 }
+
+/**
+ * Reads the counter stored for a key while its window is still active: the
+ * usage the meter shows. A missing row or an expired one counts as zero, and
+ * a database problem shows a full budget rather than an error, matching the
+ * fail-open stance of check_rate_limit.
+ */
+export async function readUsage(
+  key: string,
+  windowSeconds: number,
+): Promise<number> {
+  const { data, error } = await db()
+    .from("rate_limits")
+    .select("window_start, count")
+    .eq("key", key)
+    .maybeSingle();
+  if (error) {
+    console.error("[rate-limit] usage read failed:", error.message);
+    return 0;
+  }
+  if (!data) return 0;
+  const startedAt = new Date(data.window_start as string).getTime();
+  if (!Number.isFinite(startedAt)) return 0;
+  return Date.now() - startedAt < windowSeconds * 1000
+    ? Number(data.count) || 0
+    : 0;
+}

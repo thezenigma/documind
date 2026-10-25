@@ -18,8 +18,10 @@ export type UploadFormState =
 
 const ALLOWED_EXTENSIONS = [".pdf", ".docx", ".txt", ".md"];
 
-const FREE_MONTHLY_DOCUMENTS = 3;
-const PRO_MONTHLY_DOCUMENTS = 200;
+// F9: document counts are what the library holds right now, not per month,
+// so deleting frees the slot immediately (shared with src/lib/usage.ts).
+const FREE_DOCUMENTS = 3;
+const PRO_DOCUMENTS = 50;
 
 function safeFileName(name: string): string {
   const base = name.split(/[\\/]/).pop() ?? "document";
@@ -50,23 +52,19 @@ export async function requestUpload(_prev: UploadFormState, formData: FormData):
     return { ok: false, message: "That file is larger than the 25 MB limit. Split it or export a smaller version." };
   }
 
-  const monthStart = new Date();
-  monthStart.setUTCDate(1);
-  monthStart.setUTCHours(0, 0, 0, 0);
   const { count, error: countError } = await db()
     .from("documents")
     .select("id", { count: "exact", head: true })
-    .eq("user_id", user.id)
-    .gte("created_at", monthStart.toISOString());
+    .eq("user_id", user.id);
   if (countError) {
     console.error("[upload] quota check failed:", countError.message);
     return { ok: false, message: "Could not check your document quota. Try again in a moment." };
   }
-  const limit = user.plan === "pro" ? PRO_MONTHLY_DOCUMENTS : FREE_MONTHLY_DOCUMENTS;
+  const limit = user.plan === "pro" ? PRO_DOCUMENTS : FREE_DOCUMENTS;
   if ((count ?? 0) >= limit) {
     return {
       ok: false,
-      message: `Your ${user.plan === "pro" ? "Pro" : "free"} plan includes ${limit} documents per month. You have uploaded ${count}. Delete a document or upgrade to add more.`,
+      message: `Your ${user.plan === "pro" ? "Pro" : "free"} plan stores up to ${limit} documents, and your library already has ${count}. Delete a document or upgrade to add more.`,
     };
   }
 
