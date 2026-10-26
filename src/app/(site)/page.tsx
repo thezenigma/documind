@@ -9,14 +9,20 @@ export default function HomePage() {
         and shows the exact page behind every claim, so you can check the
         answer instead of trusting it.
       </p>
-      <div className="mt-8 flex gap-3">
-        <Link href="/signup" className="btn btn-primary">
+      <div className="mt-8 flex flex-wrap items-center gap-3">
+        <Link href="/ask" className="btn btn-primary">
+          Try the demo
+        </Link>
+        <Link href="/signup" className="btn btn-secondary">
           Create an account
         </Link>
-        <Link href="/signin" className="btn btn-secondary">
+        <Link href="/signin" className="text-sm font-medium text-muted hover:text-text hover:underline">
           Sign in
         </Link>
       </div>
+      <p className="mt-3 text-sm text-muted">
+        The demo uses sample documents and needs no account. Five questions a day.
+      </p>
     </main>
   );
 }

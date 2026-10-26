@@ -1,7 +1,17 @@
 import { randomUUID } from "crypto";
 import { getCurrentUser } from "@/lib/dal";
 import { db } from "@/lib/db";
-import { rateLimit } from "@/lib/rate-limit";
+import {
+  DEMO_QUESTION_LIMIT,
+  DEMO_WINDOW_SECONDS,
+  consumeDemoQuota,
+  demoCookieHeader,
+  demoDocuments,
+  demoOwnerId,
+  demoRemaining,
+  readDemoVisitorId,
+} from "@/lib/demo";
+import { clientIp, rateLimit } from "@/lib/rate-limit";
 import { retrievePassages } from "@/lib/retrieval";
 import { streamChat } from "@/lib/chat";
 import { verifyCitations, type CitationRecord } from "@/lib/citations";
@@ -37,12 +47,19 @@ function estimateTokens(chars: number): number {
 
 export async function POST(request: Request): Promise<Response> {
   const user = await getCurrentUser();
-  if (!user || !user.emailVerified) {
+  const signedIn = Boolean(user && user.emailVerified);
+  // Anonymous visitors reach the demo when the deployment configures one.
+  // Without DEMO_USER_ID this stays null and the sign-in message stands.
+  const demoId = signedIn ? null : demoOwnerId();
+  if (!signedIn && !demoId) {
     return Response.json(
       { error: "Sign in with a verified email to ask questions." },
       { status: 403 },
     );
   }
+  const isDemo = demoId !== null;
+  const ownerId = (signedIn ? user!.id : demoId) as string;
+  const visitorId = isDemo ? await readDemoVisitorId() : null;
 
   let body: { question?: unknown; documentIds?: unknown; conversationId?: unknown };
   try {
@@ -59,20 +76,25 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
 
-  const documentIds = Array.isArray(body.documentIds)
+  // A visitor's document ids are never read. The demo serves its own fixed
+  // set, so no forged id can reach another account's chunks.
+  let documentIds = Array.isArray(body.documentIds)
     ? (body.documentIds.filter((id): id is string => typeof id === "string" && UUID_RE.test(id)).slice(0, 20))
     : [];
+  if (isDemo) {
+    documentIds = (await demoDocuments(demoId as string)).map((d) => d.id);
+  }
   if (documentIds.length === 0) {
     return Response.json({ error: "Choose at least one document." }, { status: 400 });
   }
 
-  // Ownership and readiness: only this user's indexed documents.
+  // Ownership and readiness: only this owner's indexed documents.
   const uniqueIds = [...new Set(documentIds)];
   const { data: docs, error: docsError } = await db()
     .from("documents")
     .select("id, file_name, pages")
     .in("id", uniqueIds)
-    .eq("user_id", user.id)
+    .eq("user_id", ownerId)
     .eq("status", "ready");
   if (docsError) {
     console.error("[ask] document check failed:", docsError.message);
@@ -85,29 +107,49 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
 
-  // PRD plans and quotas: free 30 questions per day, pro 500 per day.
-  const dailyLimit = user.plan === "pro" ? 500 : 30;
-  if (!(await rateLimit(`ask:${user.id}`, dailyLimit, 86400))) {
-    return Response.json(
-      {
-        error: `You used all ${dailyLimit} questions for today. Try again after the daily window resets, or upgrade to Pro for a higher limit.`,
-      },
-      { status: 429 },
-    );
+  // PRD plans and quotas: free 30 questions per day, pro 500 per day. The
+  // demo is capped separately at 5 a day per visitor, by IP and by cookie.
+  let newVisitorId: string | null = null;
+  const visitorIp = isDemo ? await clientIp() : null;
+  if (isDemo) {
+    const quota = await consumeDemoQuota(visitorIp as string, visitorId);
+    newVisitorId = quota.visitorId;
+    if (!quota.ok) {
+      // The visitor id travels back even on a refusal, so the counter that
+      // just ran out is the same one the next attempt is measured against.
+      return Response.json(
+        {
+          error: `You used all ${DEMO_QUESTION_LIMIT} demo questions for today. Create an account to keep asking.`,
+          limitSeconds: DEMO_WINDOW_SECONDS,
+          demoRemaining: 0,
+        },
+        { status: 429, headers: { "Set-Cookie": demoCookieHeader(newVisitorId) } },
+      );
+    }
+  } else {
+    const dailyLimit = user!.plan === "pro" ? 500 : 30;
+    if (!(await rateLimit(`ask:${user!.id}`, dailyLimit, 86400))) {
+      return Response.json(
+        {
+          error: `You used all ${dailyLimit} questions for today. Try again after the daily window resets, or upgrade to Pro for a higher limit.`,
+        },
+        { status: 429 },
+      );
+    }
   }
 
   // Optional follow-up thread: reuse an owned conversation and pass its recent
-  // turns to the model.
-  let conversationId = typeof body.conversationId === "string" && UUID_RE.test(body.conversationId)
+  // turns to the model. Demo visitors get no thread, so nothing is stored.
+  let conversationId = !isDemo && typeof body.conversationId === "string" && UUID_RE.test(body.conversationId)
     ? body.conversationId
     : null;
   let history: Array<{ role: "user" | "assistant"; content: string }> = [];
-  if (conversationId) {
+  if (!isDemo && conversationId) {
     const { data: conversation } = await db()
       .from("conversations")
       .select("id")
       .eq("id", conversationId)
-      .eq("user_id", user.id)
+      .eq("user_id", ownerId)
       .maybeSingle();
     if (!conversation) conversationId = null;
     else {
@@ -129,7 +171,7 @@ export async function POST(request: Request): Promise<Response> {
   // Retrieval before any rows are written, so a search failure writes nothing.
   let passages;
   try {
-    passages = await retrievePassages({ userId: user.id, question, documentIds: uniqueIds });
+    passages = await retrievePassages({ userId: ownerId, question, documentIds: uniqueIds });
   } catch (err) {
     console.error("[ask] retrieval failed:", err instanceof Error ? err.message : err);
     return Response.json(
@@ -138,12 +180,13 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
 
-  // Conversation and question row.
-  if (!conversationId) {
+  // Conversation and question row. A demo visitor keeps no history: the
+  // question and answer stream to the screen and are never stored.
+  if (!isDemo && !conversationId) {
     conversationId = randomUUID();
     const { error: convError } = await db().from("conversations").insert({
       id: conversationId,
-      user_id: user.id,
+      user_id: ownerId,
       document_ids: uniqueIds,
       title: question.slice(0, 120),
     });
@@ -152,7 +195,7 @@ export async function POST(request: Request): Promise<Response> {
       conversationId = null;
     }
   }
-  if (conversationId) {
+  if (!isDemo && conversationId) {
     const { error: msgError } = await db().from("messages").insert({
       conversation_id: conversationId,
       role: "user",
@@ -220,7 +263,7 @@ export async function POST(request: Request): Promise<Response> {
       };
 
       send({ type: "citations", citations: initialCitations });
-      console.log(`[ask] model=${model} passages=${passages.length} user=${user.id}`);
+      console.log(`[ask] model=${model} passages=${passages.length} owner=${ownerId}${isDemo ? " demo=true" : ""}`);
 
       try {
         const { text } = await streamChat({
@@ -269,8 +312,8 @@ export async function POST(request: Request): Promise<Response> {
         }
 
         const { error: usageError } = await db().from("usage_events").insert({
-          user_id: user.id,
-          kind: "ask",
+          user_id: ownerId,
+          kind: isDemo ? "demo_ask" : "ask",
           tokens_in: estimateTokens(JSON.stringify(messages).length),
           tokens_out: estimateTokens(answer.length),
         });
@@ -280,7 +323,7 @@ export async function POST(request: Request): Promise<Response> {
           // Recorded for the admin view; the interface labels these unverified.
           console.warn(`[ask] ${unverifiedCount} unverified citation(s) in answer`);
           const { error: flagError } = await db().from("usage_events").insert({
-            user_id: user.id,
+            user_id: ownerId,
             kind: "citation_flagged",
           });
           if (flagError) console.error("[ask] flag insert failed:", flagError.message);
@@ -288,8 +331,20 @@ export async function POST(request: Request): Promise<Response> {
 
         // Return the stored citation set exactly as written. For a refusal that
         // stored the closest list, this is what restores the refusal context when
-        // the conversation is reopened later. F7.
-        send({ type: "done", citations, closest, messageId, conversationId, storedCitations: citations.length > 0 ? citations : closest });
+        // the conversation is reopened later. F7. Demo visitors also get their
+        // updated budget here, so the counter moves without a page reload.
+        const demoLeft = isDemo
+          ? await demoRemaining(visitorIp as string, newVisitorId as string)
+          : null;
+        send({
+          type: "done",
+          citations,
+          closest,
+          messageId,
+          conversationId,
+          demoRemaining: demoLeft,
+          storedCitations: citations.length > 0 ? citations : closest,
+        });
       } catch (err) {
         if (upstream.signal.aborted) {
           // The reader cancelled; close without an error frame.
@@ -313,11 +368,12 @@ export async function POST(request: Request): Promise<Response> {
     },
   });
 
-  return new Response(stream, {
-    headers: {
-      "Content-Type": "text/event-stream; charset=utf-8",
-      "Cache-Control": "no-cache, no-transform",
-      Connection: "keep-alive",
-    },
-  });
+  const responseHeaders: Record<string, string> = {
+    "Content-Type": "text/event-stream; charset=utf-8",
+    "Cache-Control": "no-cache, no-transform",
+    Connection: "keep-alive",
+  };
+  if (isDemo && newVisitorId) responseHeaders["Set-Cookie"] = demoCookieHeader(newVisitorId);
+
+  return new Response(stream, { headers: responseHeaders });
 }

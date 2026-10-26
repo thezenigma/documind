@@ -7,6 +7,11 @@ const secret = new TextEncoder().encode(process.env.AUTH_SECRET);
  * Optimistic gate for signed-in routes: verifies the cookie signature only,
  * then lets pages do the authoritative session-row check in the data access
  * layer. Next.js 16 renamed middleware to proxy.
+ *
+ * /ask is deliberately not matched: the anonymous demo (PRD F12) has to be
+ * reachable without a cookie, and that page decides for itself whether to
+ * render the demo or the signed-in view. No account data is readable there
+ * without the session check in the data access layer.
  */
 export function proxy(request: NextRequest) {
   const token = request.cookies.get("documind_session")?.value;
@@ -22,5 +27,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/library/:path*", "/ask/:path*", "/account/:path*", "/admin/:path*"],
+  matcher: ["/library/:path*", "/account/:path*", "/admin/:path*"],
 };

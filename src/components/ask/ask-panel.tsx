@@ -270,11 +270,14 @@ export function AskPanel({
   onCitation,
   initialDocumentId,
   initialConversation,
+  onDemoRemaining,
 }: {
   documents: AskDocument[];
   onCitation?: (c: WireCitation) => void;
   initialDocumentId?: string | null;
   initialConversation?: RestoredConversation | null;
+  /** Demo mode: reports the visitor's updated budget after each answer. */
+  onDemoRemaining?: (left: number) => void;
 }) {
   const [selected, setSelected] = useState<Set<string>>(
     () => {
@@ -438,8 +441,12 @@ export function AskPanel({
 
       const contentType = res.headers.get("content-type") ?? "";
       if (!res.ok || !contentType.includes("text/event-stream")) {
-        const json = (await res.json().catch(() => ({}))) as { error?: string };
+        const json = (await res.json().catch(() => ({}))) as {
+          error?: string;
+          demoRemaining?: number;
+        };
         const message = json.error ?? "The request failed. Try again.";
+        if (typeof json.demoRemaining === "number") onDemoRemaining?.(json.demoRemaining);
         patchTurn(id, {
           state: res.status === 429 ? "limit" : "error",
           error: message,
@@ -472,6 +479,7 @@ export function AskPanel({
                 citations: WireCitation[];
                 closest: WireCitation[];
                 conversationId: string | null;
+                demoRemaining?: number | null;
               }
             | { type: "error"; message: string };
           try {
@@ -486,6 +494,9 @@ export function AskPanel({
             patchTurn(id, { answer });
           } else if (payload.type === "done") {
             finished = true;
+            if (typeof payload.demoRemaining === "number" && generation === generationRef.current) {
+              onDemoRemaining?.(payload.demoRemaining);
+            }
             // A document toggle mid-answer starts a new thread; do not let
             // this response carry the old conversation id back in.
             if (generation === generationRef.current) {

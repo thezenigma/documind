@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { logout } from "@/lib/auth-actions";
 import { DocumentsList, type DocumentSummary } from "@/components/library/documents-list";
 import { UploadPanel } from "@/components/library/upload-panel";
@@ -48,6 +48,27 @@ function CloseIcon() {
   );
 }
 
+/** The thread before anything can be asked: no documents yet, in one of two
+    shapes. The demo points at an account instead of a library, because a
+    visitor cannot upload anything. */
+function EmptyThread({
+  title,
+  body,
+  children,
+}: {
+  title: string;
+  body: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center gap-4 p-6 text-center">
+      <h2 className="text-xl">{title}</h2>
+      <p className="max-w-[46ch] text-base text-muted">{body}</p>
+      {children}
+    </div>
+  );
+}
+
 /** The Ask screen as a chat shell: a top bar with the wordmark and sign out, a
     sliding drawer on the left with past conversations and the Library popup,
     a sliding dock on the right that shows a citation's source page, and the
@@ -60,15 +81,24 @@ export function AskShell({
   email,
   usageLine,
   initialDocumentId,
+  demo = false,
+  demoRemaining,
+  demoLimit,
 }: {
   documents: AskDocument[];
   libraryDocuments: DocumentSummary[];
   supabaseUrl: string;
   anonKey: string;
-  email: string;
+  email?: string;
   usageLine?: string;
   initialDocumentId?: string | null;
+  /** PRD F12: the anonymous demo shows no account surface at all. */
+  demo?: boolean;
+  /** Visitor's remaining demo questions, updated live as answers finish. */
+  demoRemaining?: number;
+  demoLimit?: number;
 }) {
+  const [demoLeft, setDemoLeft] = useState(demoRemaining ?? 0);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [dockOpen, setDockOpen] = useState(false);
@@ -206,35 +236,59 @@ export function AskShell({
 
   return (
     <>
-      {/* Top bar: navigation and account, always visible. */}
-      <header className="flex items-center justify-between gap-3 border-b border-border px-3 py-2.5 sm:px-4">
+      {/* Top bar: navigation and account, always visible. Wraps instead of
+          squeezing, so a long email or the demo counter never overflows. */}
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-3 py-2.5 sm:px-4">
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            className="inline-flex h-9 w-9 items-center justify-center rounded-[6px] border border-border bg-surface text-muted hover:text-text"
-            aria-label="Previous conversations"
-            aria-expanded={drawerOpen}
-            aria-controls="conversation-drawer"
-            onClick={openDrawer}
-          >
-            <MenuIcon />
-          </button>
+        {!demo && (
+            <button
+              type="button"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-[6px] border border-border bg-surface text-muted hover:text-text"
+              aria-label="Previous conversations"
+              aria-expanded={drawerOpen}
+              aria-controls="conversation-drawer"
+              onClick={openDrawer}
+            >
+              <MenuIcon />
+            </button>
+          )}
           <Link href="/" className="wordmark">
             DocuMind
           </Link>
         </div>
         <div className="flex items-center gap-3">
           {usageLine && (
-            <span className="hidden font-mono text-sm text-muted lg:inline">
-              {usageLine}
+            <span
+              className={
+                // The demo's remaining questions are the only budget signal a
+                // visitor gets, so that line is never hidden behind a width.
+                demo
+                  ? "font-mono text-sm text-muted"
+                  : "hidden font-mono text-sm text-muted lg:inline"
+              }
+            >
+              {demo ? `${demoLeft} of ${demoLimit ?? 5} demo questions left today` : usageLine}
             </span>
           )}
-          <span className="hidden font-mono text-sm text-muted sm:inline">{email}</span>
-          <form action={logout}>
-            <button type="submit" className="btn btn-secondary text-sm">
-              Sign out
-            </button>
-          </form>
+          {demo ? (
+            <span className="flex items-center gap-2">
+              <Link href="/signin" className="btn btn-secondary text-sm">
+                Sign in
+              </Link>
+              <Link href="/signup" className="btn btn-primary text-sm">
+                Create an account
+              </Link>
+            </span>
+          ) : (
+            <>
+              <span className="hidden font-mono text-sm text-muted sm:inline">{email}</span>
+              <form action={logout}>
+                <button type="submit" className="btn btn-secondary text-sm">
+                  Sign out
+                </button>
+              </form>
+            </>
+          )}
         </div>
       </header>
 
@@ -248,135 +302,148 @@ export function AskShell({
           onClick={() => (drawerOpen ? closeDrawer() : closeDock())}
         />
 
-        {/* Left drawer: the Library trigger above the conversation list. */}
-        <aside
-          id="conversation-drawer"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Previous conversations"
-          inert={!drawerOpen}
-          className={`absolute inset-y-0 left-0 z-40 flex w-[min(19rem,85vw)] flex-col border-r border-border bg-surface shadow-xl transform transition-transform duration-200 ease-out motion-reduce:transition-none ${
-            drawerOpen ? "translate-x-0" : "-translate-x-full"
-          }`}
-        >
-          <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
-            <p className="text-sm font-semibold">Conversations</p>
-            <button
-              type="button"
-              ref={drawerCloseRef}
-              aria-label="Close previous conversations"
-              className="inline-flex h-11 w-11 items-center justify-center rounded-[6px] text-muted hover:text-text"
-              onClick={closeDrawer}
-            >
-              <CloseIcon />
-            </button>
-          </div>
-
-          <div className="border-b border-border px-4 py-3">
-            <button
-              type="button"
-              className="btn btn-secondary w-full text-sm"
-              onClick={(e) => openLibrary(e.currentTarget)}
-            >
-              Open library
-            </button>
-          </div>
-
-          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
-            <p className="text-sm font-semibold">Previous conversations</p>
-
-            {loadingConversations && <p className="mt-3 text-sm text-muted">Loading…</p>}
-
-            {!loadingConversations && conversations.length === 0 && (
-              <p className="mt-3 text-sm text-muted">
-                No previous conversations yet. Ask a question and it will be saved here.
-              </p>
-            )}
-
-            {!loadingConversations && conversations.length > 0 && (
-              <ul className="mt-1 flex flex-col">
-                {conversations.map((c, i) => (
-                  <li
-                    key={c.id}
-                    className={`py-3 ${i < conversations.length - 1 ? "border-b border-border" : ""}`}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="truncate text-base font-semibold">
-                        {c.title || "Untitled conversation"}
-                      </p>
-                      <div className="flex shrink-0 items-center gap-2">
-                        <button
-                          type="button"
-                          className="btn btn-secondary text-sm"
-                          onClick={() => openConversation(c.id)}
-                        >
-                          Open
-                        </button>
-                        {confirmDeleteId === c.id ? (
-                          <span className="flex flex-wrap items-center gap-2">
-                            <span className="text-sm text-muted">Delete this?</span>
+        {/* Left drawer: the Library trigger above the conversation list.
+            Not rendered in the demo, where there is no account to hold a
+            conversation history and nothing to upload. */}
+        {!demo && (
+          <aside
+            id="conversation-drawer"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Previous conversations"
+            inert={!drawerOpen}
+            className={`absolute inset-y-0 left-0 z-40 flex w-[min(19rem,85vw)] flex-col border-r border-border bg-surface shadow-xl transform transition-transform duration-200 ease-out motion-reduce:transition-none ${
+              drawerOpen ? "translate-x-0" : "-translate-x-full"
+            }`}
+          >
+            <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
+              <p className="text-sm font-semibold">Conversations</p>
+              <button
+                type="button"
+                ref={drawerCloseRef}
+                aria-label="Close previous conversations"
+                className="inline-flex h-11 w-11 items-center justify-center rounded-[6px] text-muted hover:text-text"
+                onClick={closeDrawer}
+              >
+                <CloseIcon />
+              </button>
+            </div>
+  
+            <div className="border-b border-border px-4 py-3">
+              <button
+                type="button"
+                className="btn btn-secondary w-full text-sm"
+                onClick={(e) => openLibrary(e.currentTarget)}
+              >
+                Open library
+              </button>
+            </div>
+  
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+              <p className="text-sm font-semibold">Previous conversations</p>
+  
+              {loadingConversations && <p className="mt-3 text-sm text-muted">Loading…</p>}
+  
+              {!loadingConversations && conversations.length === 0 && (
+                <p className="mt-3 text-sm text-muted">
+                  No previous conversations yet. Ask a question and it will be saved here.
+                </p>
+              )}
+  
+              {!loadingConversations && conversations.length > 0 && (
+                <ul className="mt-1 flex flex-col">
+                  {conversations.map((c, i) => (
+                    <li
+                      key={c.id}
+                      className={`py-3 ${i < conversations.length - 1 ? "border-b border-border" : ""}`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="truncate text-base font-semibold">
+                          {c.title || "Untitled conversation"}
+                        </p>
+                        <div className="flex shrink-0 items-center gap-2">
+                          <button
+                            type="button"
+                            className="btn btn-secondary text-sm"
+                            onClick={() => openConversation(c.id)}
+                          >
+                            Open
+                          </button>
+                          {confirmDeleteId === c.id ? (
+                            <span className="flex flex-wrap items-center gap-2">
+                              <span className="text-sm text-muted">Delete this?</span>
+                              <button
+                                type="button"
+                                className="btn btn-secondary text-sm text-error"
+                                onClick={() => {
+                                  setConfirmDeleteId(null);
+                                  deleteConversation(c.id);
+                                }}
+                              >
+                                Delete
+                              </button>
+                              <button
+                                type="button"
+                                className="btn btn-secondary text-sm"
+                                onClick={() => setConfirmDeleteId(null)}
+                              >
+                                Cancel
+                              </button>
+                            </span>
+                          ) : (
                             <button
                               type="button"
-                              className="btn btn-secondary text-sm text-error"
-                              onClick={() => {
-                                setConfirmDeleteId(null);
-                                deleteConversation(c.id);
-                              }}
+                              className="text-sm font-medium text-error hover:underline"
+                              aria-label={`Delete conversation ${c.title || "Untitled"}`}
+                              onClick={() => setConfirmDeleteId(c.id)}
                             >
                               Delete
                             </button>
-                            <button
-                              type="button"
-                              className="btn btn-secondary text-sm"
-                              onClick={() => setConfirmDeleteId(null)}
-                            >
-                              Cancel
-                            </button>
-                          </span>
-                        ) : (
-                          <button
-                            type="button"
-                            className="text-sm font-medium text-error hover:underline"
-                            aria-label={`Delete conversation ${c.title || "Untitled"}`}
-                            onClick={() => setConfirmDeleteId(c.id)}
-                          >
-                            Delete
-                          </button>
-                        )}
+                          )}
+                        </div>
                       </div>
-                    </div>
-                    <p className="mt-1 font-mono text-sm text-muted">
-                      {c.messageCount} message{c.messageCount === 1 ? "" : "s"} ·
-                      {new Date(c.createdAt).toLocaleDateString("en-US", {
-                        month: "short",
-                        day: "numeric",
-                        year: "numeric",
-                      })}
-                    </p>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        </aside>
+                      <p className="mt-1 font-mono text-sm text-muted">
+                        {c.messageCount} message{c.messageCount === 1 ? "" : "s"} ·
+                        {new Date(c.createdAt).toLocaleDateString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                        })}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </aside>
+        )}
 
         {/* Center: the conversation thread with its composer. */}
         <div id="ask-thread" tabIndex={-1} className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
           {documents.length === 0 ? (
-            <div className="flex flex-1 flex-col items-center justify-center gap-4 p-6 text-center">
-              <h2 className="text-xl">Nothing indexed yet</h2>
-              <p className="max-w-[46ch] text-base text-muted">
-                Upload a document in your library, wait for it to finish indexing,
-                then come back here to ask about it.
-              </p>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={(e) => openLibrary(e.currentTarget)}
+            demo ? (
+              <EmptyThread
+                title="The demo is being prepared"
+                body="The sample documents are not available right now. You can still create an account and upload your own files."
               >
-                Open your library
-              </button>
-            </div>
+                <Link href="/signup" className="btn btn-primary">
+                  Create an account
+                </Link>
+              </EmptyThread>
+            ) : (
+              <EmptyThread
+                title="Nothing indexed yet"
+                body="Upload a document in your library, wait for it to finish indexing, then come back here to ask about it."
+              >
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={(e) => openLibrary(e.currentTarget)}
+                >
+                  Open your library
+                </button>
+              </EmptyThread>
+            )
           ) : (
             <AskPanel
               key={activeConversation?.id ?? initialDocumentId ?? `fresh-${freshNonce}`}
@@ -384,6 +451,7 @@ export function AskShell({
               onCitation={openCitation}
               initialDocumentId={initialDocumentId}
               initialConversation={activeConversation}
+              onDemoRemaining={demo ? setDemoLeft : undefined}
             />
           )}
         </div>
