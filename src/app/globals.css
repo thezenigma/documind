@@ -159,6 +159,18 @@ a {
   border-color: var(--accent);
 }
 
+/* Only for irreversible actions. Red, not the accent, so it cannot be
+   mistaken for the primary action next to it. */
+.btn-danger {
+  background: var(--error);
+  color: #ffffff;
+  border: 1px solid var(--error);
+}
+
+.btn-danger:hover {
+  filter: brightness(1.08);
+}
+
 .field-error {
   color: var(--error);
   font-size: 0.875rem;

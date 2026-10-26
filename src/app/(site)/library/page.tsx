@@ -50,6 +50,9 @@ export default async function LibraryPage({
           <Link href="/ask" className="link text-sm">
             Ask
           </Link>
+          <Link href="/account" className="link text-sm">
+            Account
+          </Link>
           <form action={logout}>
             <button type="submit" className="btn btn-secondary">
               Sign out
