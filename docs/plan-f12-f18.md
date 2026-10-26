@@ -213,6 +213,15 @@ Spec: thumbs plus optional reason stored with the message.
 
 ---
 
+## Eval watchlist (recorded while testing F16)
+
+Two out-of-domain questions during the F16 test ("What is the recipe for banana bread?",
+"What is the capital of Australia?") came back as handbook text with citations instead of a
+refusal, and a third ("Hamlet's soliloquy") returned the poem with a closest-passages refusal
+attached to a long answer. The export handled all three, but this is exactly the shape that
+erodes the 90 percent citation support and refusal target, so the eval pass should score
+out-of-domain questions on their own before the accuracy number is trusted.
+
 ## Sequence
 
 1. F12 demo mode, tested anonymous end to end.

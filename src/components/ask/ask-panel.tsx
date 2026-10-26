@@ -118,6 +118,70 @@ function displayNumbers(
   return map;
 }
 
+/** PRD F16: the Markdown file is built from the same turns the thread renders,
+    so the export cannot disagree with what is on screen. Every answer keeps its
+    [n] markers, and the reference list under it carries the file, the page
+    range, the quote and whether the quote was checked against the passage. */
+function exportMarkdown(title: string | null, turns: Turn[]): string {
+  const lines: string[] = [
+    `# ${title ?? "DocuMind conversation"}`,
+    "",
+    `Exported ${new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date())}`,
+    "",
+  ];
+
+  for (const turn of turns) {
+    if (turn.question) {
+      lines.push("## Question", "", turn.question, "");
+    }
+
+    const numbers = displayNumbers(turn.answer, turn.citations);
+    if (turn.answer) {
+      lines.push("## Answer", "", turn.answer, "");
+    } else if (turn.state === "error" || turn.state === "limit") {
+      lines.push("## Answer", "", turn.error ?? "No answer arrived. Try again.", "");
+    } else if (turn.state === "stopped") {
+      lines.push("## Answer", "", "Stopped.", "");
+    }
+
+    if (turn.citations && turn.citations.length > 0) {
+      lines.push("### References", "");
+      for (const c of turn.citations) {
+        const shown = c.n > 0 ? numbers.get(c.n) ?? c.n : null;
+        const label = shown ? `${shown}.` : "-";
+        const quote = c.quote ? `\n   > ${c.quote.replace(/\n+/g, "\n   > ")}` : "";
+        lines.push(
+          `${label} ${c.fileName}, ${pageLabel(c)} (${c.verified ? "checked" : "unverified"})${quote}`,
+        );
+      }
+      lines.push("");
+    }
+
+    if (turn.closest && turn.closest.length > 0) {
+      lines.push("### Closest passages found", "");
+      for (const c of turn.closest) {
+        lines.push(`- ${c.fileName}, ${pageLabel(c)}`);
+      }
+      lines.push("");
+    }
+  }
+
+  return `${lines.join("\n").replace(/\n{3,}/g, "\n\n").trimEnd()}\n`;
+}
+
+function exportFileName(title: string | null, turns: Turn[]): string {
+  const base =
+    title ??
+    turns.find((t) => t.question)?.question ??
+    "documind conversation";
+  const slug = base
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60);
+  return `${slug || "documind-conversation"}.md`;
+}
+
 function AnswerText({
   text,
   citations,
@@ -308,6 +372,7 @@ export function AskPanel({
   const abortRef = useRef<AbortController | null>(null);
   const nextIdRef = useRef(1);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [exportedName, setExportedName] = useState("");
   const pickerRef = useRef<HTMLDivElement | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const atBottomRef = useRef(true);
@@ -551,6 +616,26 @@ export function AskPanel({
     abortRef.current?.abort();
   }
 
+  /** PRD F16: a client-side download of the thread as written on screen, so
+      no server round trip and no extra permission are involved. */
+  function handleExport() {
+    const thread = [...restoredMessages, ...turns];
+    if (thread.length === 0) return;
+    const name = exportFileName(restoredTitle, thread);
+    const blob = new Blob([exportMarkdown(restoredTitle, thread)], {
+      type: "text/markdown;charset=utf-8",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = name;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setExportedName(name);
+  }
+
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     void ask();
@@ -687,46 +772,63 @@ export function AskPanel({
             </p>
           )}
 
-          {/* Document selection, collapsed into a chip that opens upward. */}
-          <div className="relative" ref={pickerRef}>
-            <button
-              type="button"
-              className="btn btn-secondary text-sm"
-              aria-expanded={pickerOpen}
-              aria-controls="doc-picker"
-              onClick={() => setPickerOpen((v) => !v)}
-            >
-              Documents · {selected.size} of {documents.length} selected
-            </button>
-            {pickerOpen && (
-              <div
-                id="doc-picker"
-                className="absolute bottom-full left-0 z-20 mb-2 w-full rounded-[6px] border border-border bg-surface p-4 shadow-xl"
+          {/* Document selection, collapsed into a chip that opens upward.
+              The export action sits beside it, so both live in the same
+              toolbar row instead of floating over the thread. */}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="relative min-w-[14rem] flex-1" ref={pickerRef}>
+              <button
+                type="button"
+                className="btn btn-secondary text-sm"
+                aria-expanded={pickerOpen}
+                aria-controls="doc-picker"
+                onClick={() => setPickerOpen((v) => !v)}
               >
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-sm font-semibold">Choose documents</p>
-                  {documents.length > 1 && (
-                    <button type="button" className="link text-sm" onClick={toggleAll}>
-                      {selected.size === documents.length ? "Clear all" : "Select all"}
-                    </button>
-                  )}
+                Documents · {selected.size} of {documents.length} selected
+              </button>
+              {pickerOpen && (
+                <div
+                  id="doc-picker"
+                  className="absolute bottom-full left-0 z-20 mb-2 w-full rounded-[6px] border border-border bg-surface p-4 shadow-xl"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-semibold">Choose documents</p>
+                    {documents.length > 1 && (
+                      <button type="button" className="link text-sm" onClick={toggleAll}>
+                        {selected.size === documents.length ? "Clear all" : "Select all"}
+                      </button>
+                    )}
+                  </div>
+                  <div className="mt-2 flex flex-col gap-1">
+                    {documents.map((doc) => (
+                      <label key={doc.id} className="flex cursor-pointer items-center gap-2 py-1 text-base">
+                        <input
+                          type="checkbox"
+                          checked={selected.has(doc.id)}
+                          onChange={() => toggleDocument(doc.id)}
+                          className="h-4 w-4 accent-[var(--accent)]"
+                        />
+                        <span>
+                          {doc.file_name}
+                          {doc.pages ? ` (${doc.pages} ${doc.pages === 1 ? "page" : "pages"})` : ""}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
                 </div>
-                <div className="mt-2 flex flex-col gap-1">
-                  {documents.map((doc) => (
-                    <label key={doc.id} className="flex cursor-pointer items-center gap-2 py-1 text-base">
-                      <input
-                        type="checkbox"
-                        checked={selected.has(doc.id)}
-                        onChange={() => toggleDocument(doc.id)}
-                        className="h-4 w-4 accent-[var(--accent)]"
-                      />
-                      <span>
-                        {doc.file_name}
-                        {doc.pages ? ` (${doc.pages} ${doc.pages === 1 ? "page" : "pages"})` : ""}
-                      </span>
-                    </label>
-                  ))}
-                </div>
+              )}
+            </div>
+
+            {(turns.length > 0 || restoredMessages.length > 0) && (
+              <div className="flex items-center gap-2">
+                <button type="button" className="btn btn-secondary text-sm" onClick={handleExport}>
+                  Export conversation (.md)
+                </button>
+                {exportedName && (
+                  <span role="status" className="hidden font-mono text-sm text-muted sm:inline">
+                    Downloaded {exportedName}
+                  </span>
+                )}
               </div>
             )}
           </div>
