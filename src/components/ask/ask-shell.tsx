@@ -6,6 +6,7 @@ import { logout } from "@/lib/auth-actions";
 import { DocumentsList, type DocumentSummary } from "@/components/library/documents-list";
 import { UploadPanel } from "@/components/library/upload-panel";
 import { AskPanel, type AskDocument, type RestoredConversation, type WireCitation } from "./ask-panel";
+import { ThemeSwitch } from "@/components/theme/theme-switch";
 import { DocumentsViewer, type ViewerTarget } from "./documents-viewer";
 
 type ConversationListItem = {
@@ -257,6 +258,7 @@ export function AskShell({
           </Link>
         </div>
         <div className="flex items-center gap-3">
+          <ThemeSwitch label="Theme for the ask screen" />
           {usageLine && (
             <span
               className={

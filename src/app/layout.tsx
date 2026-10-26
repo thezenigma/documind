@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Fraunces, Source_Sans_3, JetBrains_Mono } from "next/font/google";
+import { ThemeProvider, THEME_INIT_SCRIPT } from "@/components/theme/theme-provider";
 import "./globals.css";
 
 const fraunces = Fraunces({
@@ -34,9 +35,15 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html
       lang="en"
       className={`${fraunces.variable} ${sourceSans.variable} ${jetbrains.variable} h-full`}
+      // The pre-paint script below may add a theme class to <html> before
+      // hydration, which is exactly what it is there to do.
+      suppressHydrationWarning
     >
       <body className="flex min-h-full flex-col">
-        <div className="flex flex-1 flex-col">{children}</div>
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+        <ThemeProvider>
+          <div className="flex flex-1 flex-col">{children}</div>
+        </ThemeProvider>
       </body>
     </html>
   );

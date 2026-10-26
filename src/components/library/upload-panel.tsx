@@ -197,7 +197,11 @@ export function UploadPanel({
               {errorMessage}
             </p>
           )}
+          <label htmlFor="upload-file" className="sr-only">
+            Choose a document file to upload
+          </label>
           <input
+            id="upload-file"
             type="file"
             name="file"
             accept=".pdf,.docx,.txt,.md"

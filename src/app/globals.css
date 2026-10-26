@@ -32,6 +32,7 @@
 }
 
 :root {
+  color-scheme: light;
   --background: #f6f3ec;
   --surface: #ffffff;
   --text: #1b1a17;
@@ -44,8 +45,13 @@
   --warning: #8a5a12;
 }
 
+/* F18 dark theme: warm charcoal keeps the paper character, ink becomes warm
+   off-white, borders lift one step so the grid still reads. Two ways in: the
+   reader's system preference, unless they pinned light, and the pinned
+   .theme-dark class the switch writes. Everything in the app themes from these
+   variables, so no dark: utility classes are needed anywhere. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not(.theme-light) {
     color-scheme: dark;
     --background: #1c1b18;
     --surface: #252420;
@@ -58,6 +64,34 @@
     --error: #e08a7b;
     --warning: #d9a441;
   }
+}
+
+:root.theme-dark {
+  color-scheme: dark;
+  --background: #1c1b18;
+  --surface: #252420;
+  --text: #ece8df;
+  --muted: #a39e92;
+  --border: #3a3830;
+  --accent: #5db594;
+  --accent-contrast: #16322a;
+  --highlight: #5b4f1c;
+  --error: #e08a7b;
+  --warning: #d9a441;
+}
+
+:root.theme-light {
+  color-scheme: light;
+  --background: #f6f3ec;
+  --surface: #ffffff;
+  --text: #1b1a17;
+  --muted: #5e5a50;
+  --border: #ddd7c9;
+  --accent: #1f5f4a;
+  --accent-contrast: #ffffff;
+  --highlight: #f3e3a3;
+  --error: #a3392b;
+  --warning: #8a5a12;
 }
 
 body {
@@ -174,6 +208,31 @@ a {
 .field-error {
   color: var(--error);
   font-size: 0.875rem;
+}
+
+/* F18: the three positions of the theme switch. The pressed one carries the
+   accent so the current theme is readable at a glance, and no transition
+   lives inside the hover rule (lint:design rule). */
+.theme-option {
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+}
+
+.theme-option:hover {
+  color: var(--text);
+  border-color: var(--border);
+}
+
+.theme-option[aria-pressed="true"] {
+  color: var(--accent-contrast);
+  background: var(--accent);
+  border-color: var(--accent);
 }
 
 .form-message {
