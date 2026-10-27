@@ -56,7 +56,10 @@ export function UsageMeter({ usage }: { usage: Usage }) {
         />
         <MeterRow
           label="Questions left today"
-          used={usage.dailyQuestionLimit - usage.questionsLeft}
+          /* PRD F10: shows questions LEFT today, so the row carries the
+             remaining count (the account page and ask header read the same
+             number; see app/(site)/account and app/ask). */
+          used={usage.questionsLeft}
           limit={usage.dailyQuestionLimit}
           exhausted={usage.questionsLeft === 0}
         />
