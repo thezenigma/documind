@@ -24,6 +24,7 @@ export function SignupForm() {
           type="email"
           autoComplete="email"
           required
+          maxLength={254}
           className="input"
           aria-invalid={state?.fieldErrors?.email ? true : undefined}
         />
@@ -44,10 +45,11 @@ export function SignupForm() {
           autoComplete="new-password"
           required
           minLength={8}
+          maxLength={200}
           className="input"
           aria-invalid={state?.fieldErrors?.password ? true : undefined}
         />
-        <p className="text-sm text-muted">At least 8 characters with a letter and a number.</p>
+        <p className="text-sm text-muted">At least 8 characters with a letter and a number, up to 200.</p>
         {state?.fieldErrors?.password && (
           <p className="field-error" role="alert">
             {state.fieldErrors.password}

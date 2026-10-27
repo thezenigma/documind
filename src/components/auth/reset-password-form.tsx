@@ -25,10 +25,11 @@ export function ResetPasswordForm({ token }: { token: string }) {
           autoComplete="new-password"
           required
           minLength={8}
+          maxLength={200}
           className="input"
           aria-invalid={state?.fieldErrors?.password ? true : undefined}
         />
-        <p className="text-sm text-muted">At least 8 characters with a letter and a number.</p>
+        <p className="text-sm text-muted">At least 8 characters with a letter and a number, up to 200.</p>
         {state?.fieldErrors?.password && (
           <p className="field-error" role="alert">
             {state.fieldErrors.password}

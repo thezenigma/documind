@@ -90,6 +90,7 @@ export function DocumentsList({ documents }: { documents: DocumentSummary[] }) {
             name="document-search"
             type="search"
             className="input mt-1"
+            maxLength={200}
             placeholder="handbook…"
             autoComplete="off"
             spellCheck={false}

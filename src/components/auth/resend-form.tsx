@@ -23,6 +23,7 @@ export function ResendForm() {
           type="email"
           autoComplete="email"
           required
+          maxLength={254}
           placeholder="name@example.com"
           className="input"
           aria-invalid={state?.fieldErrors?.email ? true : undefined}

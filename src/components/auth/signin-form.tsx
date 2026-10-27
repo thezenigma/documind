@@ -24,6 +24,7 @@ export function SigninForm() {
           type="email"
           autoComplete="email"
           required
+          maxLength={254}
           className="input"
           aria-invalid={state?.fieldErrors?.email ? true : undefined}
         />
@@ -43,6 +44,7 @@ export function SigninForm() {
           type="password"
           autoComplete="current-password"
           required
+          maxLength={200}
           className="input"
           aria-invalid={state?.fieldErrors?.password ? true : undefined}
         />

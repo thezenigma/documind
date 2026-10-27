@@ -51,6 +51,7 @@ export function DeleteAccountForm({ email }: { email: string }) {
           autoComplete="email"
           spellCheck={false}
           required
+          maxLength={254}
           aria-invalid={state?.fieldErrors?.confirmEmail ? true : undefined}
           aria-describedby={state?.fieldErrors?.confirmEmail ? "confirm-email-error" : undefined}
           className="input mt-1"
@@ -72,6 +73,7 @@ export function DeleteAccountForm({ email }: { email: string }) {
           type="password"
           autoComplete="current-password"
           required
+          maxLength={200}
           aria-invalid={state?.fieldErrors?.password ? true : undefined}
           aria-describedby={state?.fieldErrors?.password ? "delete-password-error" : undefined}
           className="input mt-1"

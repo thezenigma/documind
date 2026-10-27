@@ -23,6 +23,7 @@ export function ForgotPasswordForm() {
           type="email"
           autoComplete="email"
           required
+          maxLength={254}
           className="input"
           aria-invalid={state?.fieldErrors?.email ? true : undefined}
         />
