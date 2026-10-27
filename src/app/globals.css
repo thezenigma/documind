@@ -235,6 +235,36 @@ a {
   border-color: var(--accent);
 }
 
+/* F15: thumbs on a stored answer. The pressed one carries the accent, the
+   same treatment as the theme switch, so selected reads the same everywhere.
+   No transition lives inside the hover rule (lint:design rule). */
+.feedback-btn {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.25rem 0.7rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--muted);
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.feedback-btn:hover {
+  color: var(--text);
+  border-color: var(--muted);
+}
+
+.feedback-btn[aria-pressed="true"] {
+  color: var(--accent-contrast);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.feedback-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .form-message {
   border: 1px solid var(--border);
   border-radius: 6px;

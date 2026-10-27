@@ -31,6 +31,11 @@ type Turn = {
   closest: WireCitation[] | null;
   state: TurnState;
   error?: string;
+  /** PRD F15: the stored answer row, which is what feedback attaches to.
+      Null while streaming or for demo answers, which are never stored. */
+  messageId?: string | null;
+  feedback?: "up" | "down" | null;
+  feedbackReason?: string | null;
 };
 
 type StoredMessage = {
@@ -38,6 +43,8 @@ type StoredMessage = {
   role: "user" | "assistant";
   content: string;
   citations: Array<Record<string, unknown>>;
+  feedback?: "up" | "down" | null;
+  feedbackReason?: string | null;
   createdAt: string;
 };
 
@@ -77,16 +84,21 @@ function wireFromStored(c: Array<Record<string, unknown>>): WireCitation[] {
     }));
 }
 
-function restoreTurn(m: StoredMessage): Turn {
+function restoreTurn(m: StoredMessage, index: number): Turn {
   const citations = wireFromStored(m.citations);
   const closest = citations.filter((c) => c.closest);
   return {
-    id: Number(m.id),
+    // A UUID does not fit a number; restored turns take negative ids in
+    // order, which cannot collide with the positive ids fresh turns get.
+    id: -(index + 1),
     question: m.role === "user" ? m.content : "",
     answer: m.role === "assistant" ? m.content : "",
     citations: m.role === "assistant" && citations.length > 0 ? citations : null,
     closest: closest.length > 0 ? closest : null,
     state: "done" as const,
+    messageId: m.role === "assistant" ? m.id : null,
+    feedback: m.role === "assistant" ? m.feedback ?? null : null,
+    feedbackReason: m.role === "assistant" ? m.feedbackReason ?? null : null,
   };
 }
 
@@ -321,6 +333,141 @@ function ClosestPassages({
   );
 }
 
+/** PRD F15: thumbs on a stored answer. The value posts immediately so the
+    pressed state is honest; a down vote opens one optional line that only
+    saves on an explicit Send, so a stray click never writes text the reader
+    did not mean to send. Demo answers carry no message id and never render
+    this control. */
+function FeedbackBar({
+  messageId,
+  value,
+  reason,
+  onChange,
+}: {
+  messageId: string;
+  value: "up" | "down" | null;
+  reason: string | null;
+  onChange: (next: { value: "up" | "down" | null; reason: string | null }) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [failed, setFailed] = useState(false);
+
+  async function send(next: { value: "up" | "down" | null; reason: string | null }): Promise<boolean> {
+    setSaving(true);
+    setFailed(false);
+    try {
+      const res = await fetch("/api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messageId,
+          value: next.value ?? "clear",
+          reason: next.reason,
+        }),
+      });
+      const json = (await res.json().catch(() => ({}))) as {
+        value?: "up" | "down" | null;
+        reason?: string | null;
+        error?: string;
+      };
+      const saved = json.value === null || json.value === "up" || json.value === "down";
+      if (!res.ok || !saved) {
+        throw new Error(json.error ?? "save failed");
+      }
+      onChange({ value: json.value ?? null, reason: json.reason ?? null });
+      return true;
+    } catch {
+      setFailed(true);
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function handleValue(next: "up" | "down") {
+    if (next === "up") {
+      setOpen(false);
+      void send({ value: value === "up" ? null : "up", reason: null });
+      return;
+    }
+    // Pressing Not helpful again while the reason field is open just closes
+    // it: the value itself was already stored when the field opened.
+    if (value === "down" && open) {
+      setOpen(false);
+      return;
+    }
+    setDraft(reason ?? "");
+    setOpen(true);
+    if (value !== "down") void send({ value: "down", reason: null });
+  }
+
+  function handleSend(event: React.FormEvent) {
+    event.preventDefault();
+    void send({ value: "down", reason: draft }).then((ok) => {
+      if (ok) setOpen(false);
+    });
+  }
+
+  return (
+    <div className="mt-3 border-t border-border pt-3">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <p className="text-sm text-muted">Was this answer helpful?</p>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            className="feedback-btn"
+            aria-pressed={value === "up"}
+            disabled={saving}
+            onClick={() => handleValue("up")}
+          >
+            Helpful
+          </button>
+          <button
+            type="button"
+            className="feedback-btn"
+            aria-pressed={value === "down"}
+            disabled={saving}
+            onClick={() => handleValue("down")}
+          >
+            Not helpful
+          </button>
+        </div>
+      </div>
+
+      {value === "down" && !open && reason && (
+        <p className="mt-2 text-sm text-muted">Reason: {reason}</p>
+      )}
+
+      {open && (
+        <form onSubmit={handleSend} className="mt-2 flex flex-wrap items-center gap-2">
+          <label htmlFor={`feedback-reason-${messageId}`} className="sr-only">
+            Why was this answer not helpful?
+          </label>
+          <input
+            id={`feedback-reason-${messageId}`}
+            className="input min-w-[14rem] flex-1 text-sm"
+            value={draft}
+            maxLength={500}
+            placeholder="Optional reason, one line."
+            onChange={(event) => setDraft(event.target.value)}
+          />
+          <button type="submit" className="btn btn-primary text-sm" disabled={saving}>
+            {saving ? "Saving." : "Send"}
+          </button>
+        </form>
+      )}
+
+      {failed && (
+        <p role="alert" className="mt-2 text-sm text-error">
+          Could not save your feedback. Try again.
+        </p>
+      )}
+    </div>
+  );
+}
+
 export type RestoredConversation = {
   id: string;
   title: string;
@@ -362,7 +509,7 @@ export function AskPanel({
   );
   const [restoredMessages, setRestoredMessages] = useState<Turn[]>(
     initialConversation
-      ? initialConversation.messages.map(restoreTurn)
+      ? initialConversation.messages.map((m, i) => restoreTurn(m, i))
       : [],
   );
   const conversationIdRef = useRef<string | null>(
@@ -447,6 +594,12 @@ export function AskPanel({
 
   function patchTurn(id: number, patch: Partial<Turn>) {
     setTurns((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)));
+  }
+
+  /** Feedback on a restored answer patches the restored list, which is
+      rendered separately from the live turns. */
+  function patchRestored(id: number, patch: Partial<Turn>) {
+    setRestoredMessages((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)));
   }
 
   /** Continue a conversation from a restored one: keeps the same conversation id
@@ -543,6 +696,7 @@ export function AskPanel({
                 type: "done";
                 citations: WireCitation[];
                 closest: WireCitation[];
+                messageId: string | null;
                 conversationId: string | null;
                 demoRemaining?: number | null;
               }
@@ -581,6 +735,7 @@ export function AskPanel({
                   ? stored.filter((c) => !c.closest)
                   : null,
               closest: stored.filter((c) => c.closest),
+              messageId: payload.messageId ?? null,
               state: "done",
             });
           } else if (payload.type === "error") {
@@ -698,6 +853,19 @@ export function AskPanel({
                         onCitation={onCitation}
                       />
                     )}
+                    {turn.messageId && (
+                      <FeedbackBar
+                        messageId={turn.messageId}
+                        value={turn.feedback ?? null}
+                        reason={turn.feedbackReason ?? null}
+                        onChange={(next) =>
+                          patchRestored(turn.id, {
+                            feedback: next.value,
+                            feedbackReason: next.reason,
+                          })
+                        }
+                      />
+                    )}
                   </div>
                 )}
               </Fragment>
@@ -755,6 +923,20 @@ export function AskPanel({
 
                   {turn.citations && (
                     <References citations={turn.citations} numbers={numbers} onCitation={onCitation} />
+                  )}
+
+                  {turn.state === "done" && turn.messageId && (
+                    <FeedbackBar
+                      messageId={turn.messageId}
+                      value={turn.feedback ?? null}
+                      reason={turn.feedbackReason ?? null}
+                      onChange={(next) =>
+                        patchTurn(turn.id, {
+                          feedback: next.value,
+                          feedbackReason: next.reason,
+                        })
+                      }
+                    />
                   )}
                 </div>
               );

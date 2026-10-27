@@ -39,7 +39,7 @@ export async function GET(
 
   const { data: messages } = await db()
     .from("messages")
-    .select("id, role, content, citations, created_at")
+    .select("id, role, content, citations, feedback, feedback_reason, created_at")
     .eq("conversation_id", id)
     .order("created_at", { ascending: true });
 
@@ -48,6 +48,8 @@ export async function GET(
     role: string;
     content: string;
     citations: Array<Record<string, unknown>> | null;
+    feedback: "up" | "down" | null;
+    feedback_reason: string | null;
     created_at: string;
   }>;
 
@@ -61,6 +63,8 @@ export async function GET(
       role: m.role as "user" | "assistant",
       content: m.content,
       citations: m.citations ?? [],
+      feedback: m.role === "assistant" ? m.feedback ?? null : null,
+      feedbackReason: m.role === "assistant" ? m.feedback_reason ?? null : null,
       createdAt: m.created_at,
     })),
   });
