@@ -10,13 +10,14 @@ const secretKey = new TextEncoder().encode(process.env.AUTH_SECRET);
 
 type SessionJwt = { sid: string };
 
+export type StartSession = { token: string; maxAge: number };
+
 /**
- * Creates a session row in the database, then stores a signed reference to it
- * in an httpOnly cookie. The cookie alone is useless without the row, so
- * deleting rows (logout, password reset, account deletion) ends sessions
- * immediately.
+ * Creates a session row in the database and returns the signed reference to
+ * it. The cookie alone is useless without the row, so deleting rows (logout,
+ * password reset, account deletion) ends sessions immediately.
  */
-export async function createSession(userId: string): Promise<void> {
+export async function startSession(userId: string): Promise<StartSession> {
   const expiresAt = new Date(Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000);
   const { data, error } = await db()
     .from("sessions")
@@ -32,12 +33,28 @@ export async function createSession(userId: string): Promise<void> {
     .setIssuedAt()
     .setExpirationTime(`${SESSION_DAYS}d`)
     .sign(secretKey);
+  return { token, maxAge: SESSION_DAYS * 24 * 60 * 60 };
+}
+
+/** Attributes every session cookie carries, wherever it is attached. */
+export const SESSION_COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "lax",
+  path: "/",
+} as const;
+
+/**
+ * Creates a session row in the database, then stores a signed reference to it
+ * in an httpOnly cookie. Used by server actions; route handlers that build
+ * their own redirect response call startSession and attach SESSION_COOKIE
+ * themselves, so the cookie cannot be lost on the redirect.
+ */
+export async function createSession(userId: string): Promise<void> {
+  const { token, maxAge } = await startSession(userId);
   (await cookies()).set(SESSION_COOKIE, token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    maxAge: SESSION_DAYS * 24 * 60 * 60,
-    path: "/",
+    ...SESSION_COOKIE_OPTIONS,
+    maxAge,
   });
 }
 

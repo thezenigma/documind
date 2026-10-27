@@ -102,6 +102,15 @@ export async function login(_prev: FormState, formData: FormData): Promise<FormS
     .eq("email", email)
     .maybeSingle();
 
+  // Google-only accounts carry no password_hash. Telling the reader the
+  // address belongs to Google beats a generic "password is incorrect".
+  if (user && user.password_hash === null) {
+    return {
+      message:
+        "This account signs in with Google. Use the Google button instead of a password.",
+    };
+  }
+
   const valid = user ? await compare(password, user.password_hash) : false;
   if (!user || !valid) return { message: "Email or password is incorrect." };
   if (!user.email_verified_at) {
