@@ -81,7 +81,7 @@ export default async function AdminPage() {
       usageRes.error?.message ?? "",
     );
     return (
-      <main className="mx-auto w-full max-w-6xl px-6 py-10">
+      <main className="margin-rule mx-auto w-full max-w-6xl px-6 py-10">
         <h1 className="text-2xl">Admin</h1>
         <p className="form-message form-message-error mt-4" role="alert">
           The usage numbers could not be loaded. Try again in a moment.
@@ -122,7 +122,7 @@ export default async function AdminPage() {
   const flagged = flaggedRes.data ?? [];
 
   return (
-    <main className="mx-auto w-full max-w-6xl px-6 py-10">
+    <main className="margin-rule mx-auto w-full max-w-6xl px-6 py-10">
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <h1 className="text-2xl">Admin</h1>
         <Link href="/account" className="link text-sm">

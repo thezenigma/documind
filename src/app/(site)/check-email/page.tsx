@@ -9,7 +9,7 @@ type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 export default function CheckEmailPage(props: PageProps<"/check-email">) {
   return (
     <main className="flex flex-1 items-center justify-center px-6 py-16">
-      <div className="w-full max-w-sm">
+      <div className="margin-rule w-full max-w-sm [--margin-left:-14px]">
         <h1 className="text-2xl">Check your email</h1>
         <div className="mt-4 min-h-[1.5rem]">
           <Suspense fallback={null}>

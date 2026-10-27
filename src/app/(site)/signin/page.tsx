@@ -10,7 +10,7 @@ type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 export default function SigninPage(props: PageProps<"/signin">) {
   return (
     <main className="flex flex-1 items-center justify-center px-6 py-16">
-      <div className="w-full max-w-sm">
+      <div className="margin-rule w-full max-w-sm [--margin-left:-14px]">
         <h1 className="text-2xl">Sign in</h1>
         <p className="mt-2 text-base text-muted">
           Sign in to reach your library and conversations.

@@ -421,7 +421,7 @@ export function AskShell({
         )}
 
         {/* Center: the conversation thread with its composer. */}
-        <div id="ask-thread" tabIndex={-1} className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+        <div id="ask-thread" tabIndex={-1} className="margin-rule relative flex min-h-0 flex-1 flex-col overflow-hidden [--margin-left:2px]">
           {documents.length === 0 ? (
             demo ? (
               <EmptyThread

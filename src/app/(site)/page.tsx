@@ -22,7 +22,7 @@ export default function HomePage({
   searchParams: Promise<SearchParams>;
 }) {
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col items-start justify-center px-6 py-20">
+    <main className="margin-rule mx-auto flex w-full max-w-3xl flex-1 flex-col items-start justify-center px-6 py-20">
       <Suspense fallback={null}>
         <DeletedNotice searchParams={searchParams} />
       </Suspense>

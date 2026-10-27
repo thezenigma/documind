@@ -30,3 +30,12 @@ Recorded 2026-10-24 during the design intake step. Source of truth: prd.md secti
 ## Copy
 
 - Plain language. Say what happened, why, and what to do next. No hype, no exclamation marks, no em dashes, no emoji. Sentence case in headings, buttons and labels.
+
+## Notebook styling (owner request 2026-10-28, Phase 1)
+
+- Direction: docs/plan-notebook-style.md. The notebook character extends the existing paper world with hairline signatures only; palette, fonts, 6px radius and the banned-pattern list are untouched.
+- Page ruling: body carries a repeating-linear-gradient on a 28px rhythm at low-alpha ink (`--rule`: rgb 94 90 80 / 0.14 light, rgb 163 158 146 / 0.13 dark). Opaque surfaces cover it; transparent areas show it. Linear gradients are the one form lint:design permits.
+- Margin rule: `.margin-rule::before`, a 1px line at `--margin-rule` 14px before the text starts. It reuses the error red as structure, not status: light rgb 163 57 43 / 0.55, dark rgb 224 138 123 / 0.42. Page columns default to left 10px, auth columns override `--margin-left` to -14px, the ask thread to 2px. Owner veto recorded: swapping `--margin-rule` to `var(--border)` converts the line to plain neutral with one token change.
+- Composer ruling: `.input.lined` puts 24.8px rules under the 16px/1.55 line box with background-attachment: local so text scrolls on its lines. Measured in the browser: first baseline lands 0.6px above the first rule, line growth is exactly 24.8px per line.
+- Ledger: `table thead tr.border-b` becomes a 3px double rule in `--border`, the exam-ledger heading treatment, in library and admin tables.
+- Not in scope, rejected in the plan: spiral binding, punch holes, tape, handwriting fonts, offset block shadows.

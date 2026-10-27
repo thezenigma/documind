@@ -43,6 +43,10 @@
   --highlight: #f3e3a3;
   --error: #a3392b;
   --warning: #8a5a12;
+  /* Notebook surface (docs/plan-notebook-style.md): ruling is ink at low
+     alpha, the margin rule is the existing error red used as a hairline. */
+  --rule: rgb(94 90 80 / 0.14);
+  --margin-rule: rgb(163 57 43 / 0.55);
 }
 
 /* F18 dark theme: warm charcoal keeps the paper character, ink becomes warm
@@ -63,6 +67,8 @@
     --highlight: #5b4f1c;
     --error: #e08a7b;
     --warning: #d9a441;
+    --rule: rgb(163 158 146 / 0.13);
+    --margin-rule: rgb(224 138 123 / 0.42);
   }
 }
 
@@ -78,6 +84,8 @@
   --highlight: #5b4f1c;
   --error: #e08a7b;
   --warning: #d9a441;
+  --rule: rgb(163 158 146 / 0.13);
+  --margin-rule: rgb(224 138 123 / 0.42);
 }
 
 :root.theme-light {
@@ -92,13 +100,42 @@
   --highlight: #f3e3a3;
   --error: #a3392b;
   --warning: #8a5a12;
+  --rule: rgb(94 90 80 / 0.14);
+  --margin-rule: rgb(163 57 43 / 0.55);
 }
 
 body {
-  background: var(--background);
+  background-color: var(--background);
+  /* Notebook ruling: hairlines on a 28px rhythm, low contrast ink. Opaque
+     sheets cover them; transparent areas show them. A linear gradient only,
+     which lint:design allows (it bans the radial form). */
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0 27px,
+    var(--rule) 27px 28px
+  );
   color: var(--text);
   font-family: var(--font-sans);
   line-height: 1.55;
+}
+
+/* The margin rule of the notebook page: one muted red hairline 14px before
+   the text starts. Page columns carry it at their own padding edge; form
+   columns opt out with [--margin-left:-14px] because their text begins at
+   the column edge. */
+.margin-rule {
+  position: relative;
+}
+
+.margin-rule::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--margin-left, 10px);
+  width: 1px;
+  background: var(--margin-rule);
+  pointer-events: none;
 }
 
 h1,
@@ -149,6 +186,28 @@ a {
 
 .input::placeholder {
   color: var(--muted);
+}
+
+/* The ask composer: writing on the line. Rules sit under the 16px/1.55
+   baseline and scroll with the text (background-attachment: local), so the
+   question is written on notebook ruling. Tuned against the rendered
+   composer; keep the 26px offset and 24.8px step with any line-height
+   change. */
+.input.lined {
+  background-image: repeating-linear-gradient(
+    to bottom,
+    var(--rule) 0 1px,
+    transparent 1px 24.8px
+  );
+  background-position: 0 26px;
+  background-attachment: local;
+  line-height: 24.8px;
+}
+
+/* Ledger rule under every data table heading row: the exam paper's double
+   hairline. Class specificity beats the border-b utility on the same tr. */
+table thead tr.border-b {
+  border-bottom: 3px double var(--border);
 }
 
 .btn {

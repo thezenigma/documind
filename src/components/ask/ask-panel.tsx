@@ -1022,7 +1022,7 @@ export function AskPanel({
               </label>
               <textarea
                 id="ask-question"
-                className="input min-h-[64px] resize-y"
+                className="input lined min-h-[64px] resize-y"
                 rows={2}
                 maxLength={2000}
                 placeholder="What does the probation policy say?"

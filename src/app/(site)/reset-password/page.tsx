@@ -9,7 +9,7 @@ type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 export default function ResetPasswordPage(props: PageProps<"/reset-password">) {
   return (
     <main className="flex flex-1 items-center justify-center px-6 py-16">
-      <div className="w-full max-w-sm">
+      <div className="margin-rule w-full max-w-sm [--margin-left:-14px]">
         <Suspense
           fallback={<p className="text-base text-muted">Loading the reset form…</p>}
         >
