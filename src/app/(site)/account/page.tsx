@@ -41,6 +41,11 @@ export default async function AccountPage() {
           <Link href="/ask" className="link text-sm">
             Ask
           </Link>
+          {user.isAdmin && (
+            <Link href="/admin" className="link text-sm">
+              Admin
+            </Link>
+          )}
         </div>
       </div>
 

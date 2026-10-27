@@ -349,7 +349,16 @@ export async function POST(request: Request): Promise<Response> {
         if (upstream.signal.aborted) {
           // The reader cancelled; close without an error frame.
         } else {
-          console.error("[ask] stream failed:", err instanceof Error ? err.message : err);
+          const message = err instanceof Error ? err.message : String(err);
+          console.error("[ask] stream failed:", message);
+          // F14: failures land in usage_events so the admin view shows what
+          // broke and not only what succeeded.
+          const { error: usageError } = await db().from("usage_events").insert({
+            user_id: ownerId,
+            kind: isDemo ? "demo_ask" : "ask",
+            error: message.slice(0, 500),
+          });
+          if (usageError) console.error("[ask] error usage insert failed:", usageError.message);
           send({
             type: "error",
             message: "The answer was interrupted before it finished. Try asking again.",

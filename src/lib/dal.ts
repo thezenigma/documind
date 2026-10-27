@@ -1,6 +1,6 @@
 import "server-only";
 import { cache } from "react";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { db } from "./db";
 import { readSessionId } from "./session";
 
@@ -49,5 +49,16 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
 export async function requireUser(): Promise<CurrentUser> {
   const user = await getCurrentUser();
   if (!user) redirect("/signin");
+  return user;
+}
+
+/**
+ * PRD F14. For the admin usage view. A signed out visitor is redirected to
+ * sign in; a signed in non-admin gets a 404 rather than a "no access" page,
+ * so the route does not advertise itself to the accounts it excludes.
+ */
+export async function requireAdmin(): Promise<CurrentUser> {
+  const user = await requireUser();
+  if (!user.isAdmin) notFound();
   return user;
 }
