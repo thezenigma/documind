@@ -222,12 +222,22 @@ attached to a long answer. The export handled all three, but this is exactly the
 erodes the 90 percent citation support and refusal target, so the eval pass should score
 out-of-domain questions on their own before the accuracy number is trusted.
 
-## Sequence
+## Sequence (status at handoff)
 
-1. F12 demo mode, tested anonymous end to end.
-2. F13 deletion, tested with a real throwaway account.
-3. F16 export, tested against a real conversation file.
-4. F18 dark theme, tested live.
-5. F17 Google sign-in, tested to the edge of what needs real credentials.
-6. Migration is written and handed over, then F15 and F14 land together.
-7. Stripe hosted checkout as soon as the test key arrives.
+All seven code features in this plan are shipped, each as its own commit, all pushed to
+`main`:
+
+1. F12 demo mode, tested anonymous end to end. Shipped `43328ac`.
+2. F13 deletion, tested with a real throwaway account. Shipped `a749324`.
+3. F16 export, tested against a real conversation file. Shipped `23bb906`.
+4. F18 dark theme, tested live. Shipped `117e670`.
+5. F17 Google sign-in, tested to the edge of what needs real credentials. Shipped `9a435c6`.
+6. Migration `supabase/migrations/0001_feedback_and_errors.sql` written and applied, then
+   F15 shipped `aca42e0` and F14 shipped `60dcaa5`.
+7. Stripe hosted checkout as soon as the test key arrives. Still open: the webhook and plan
+   flip are proven locally with `whsec_local_f11test`, only the hosted-checkout redirect
+   (4242 card) needs the real `sk_test_` key.
+
+After this plan: the eval pass against the 85 percent correctness and 90 percent citation
+support and refusal targets (score out-of-domain questions separately, see watchlist above),
+and a real 50-page ingestion under 60 seconds test.
