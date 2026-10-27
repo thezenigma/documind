@@ -103,7 +103,10 @@ export function DocumentsList({ documents }: { documents: DocumentSummary[] }) {
         </div>
       </div>
 
-      <div className="mt-3 overflow-x-auto">
+      {/* relative: keeps absolutely positioned sr-only spans (the Actions
+          header) clipped inside this scroller instead of extending the
+          page's horizontal scroll area at narrow widths. */}
+      <div className="relative mt-3 overflow-x-auto">
         <table className="w-full min-w-[44rem] border-collapse text-left">
           <caption className="sr-only">
             Documents in your library with page counts, processing status, and
